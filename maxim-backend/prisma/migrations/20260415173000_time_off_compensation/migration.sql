@@ -1,0 +1,2 @@
+ALTER TABLE "TimeOffEntry"
+ADD COLUMN IF NOT EXISTS "compensation" TEXT NOT NULL DEFAULT 'paid';

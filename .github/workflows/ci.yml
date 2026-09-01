@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: maxim-backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: maxim-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci || (npm install && echo "::warning::Lock file was out of sync. Run 'npm install' in maxim-backend and commit package-lock.json.")
+
+      - name: Validate staging Prisma direct URL
+        run: |
+          set -e
+          if [ -z "${DIRECT_URL}" ]; then
+            echo "::error::STAGING_DIRECT_URL is required for Prisma migrations and client generation."
+            exit 1
+          fi
+          if echo "${DIRECT_URL}" | grep -qi 'pooler'; then
+            echo "::error::STAGING_DIRECT_URL must be a direct Neon connection, not the pooled '-pooler' host."
+            exit 1
+          fi
+        env:
+          DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: maxim-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: maxim-frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: maxim-frontend
+        env:
+          VITE_API_URL: https://placeholder-for-staging.example.com

@@ -1,0 +1,101 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: maxim-backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: maxim-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci || (npm install && echo "::warning::Lock file was out of sync. Run 'npm install' in maxim-backend and commit package-lock.json.")
+
+      - name: Validate production Prisma direct URL
+        run: |
+          set -e
+          if [ -z "${DIRECT_URL}" ]; then
+            echo "::error::PROD_DIRECT_URL is required for Prisma migrations and client generation."
+            exit 1
+          fi
+          if echo "${DIRECT_URL}" | grep -qi 'pooler'; then
+            echo "::error::PROD_DIRECT_URL must be a direct Neon connection, not the pooled '-pooler' host."
+            exit 1
+          fi
+        env:
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply migrations to production DB
+        run: |
+          set -e
+          for i in 1 2 3 4 5; do
+            echo "Migration attempt $i/5"
+            if npm run db:migrate:deploy; then
+              echo "Migrations applied successfully."
+              exit 0
+            fi
+            if [ "$i" -lt 5 ]; then
+              echo "Migration attempt failed (possible advisory lock). Retrying in 20s..."
+              sleep 20
+            fi
+          done
+          echo "Migration failed after 5 attempts."
+          exit 1
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: maxim-backend/
+
+  health-check:
+    runs-on: ubuntu-latest
+    needs: deploy
+
+    steps:
+      - name: Wait for Azure to warm up
+        run: sleep 30
+
+      - name: Health check
+        run: |
+          for i in 1 2 3; do
+            STATUS=$(curl -s https://api.maximmech.com/health)
+            echo "Attempt $i: $STATUS"
+            if echo $STATUS | grep -q '"status":"ok"'; then
+              echo "Health check passed"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Health check failed after 3 attempts - check Azure logs"

@@ -1,0 +1,1 @@
+ALTER TABLE "IncomingInvoice" ADD COLUMN IF NOT EXISTS "notes" TEXT;

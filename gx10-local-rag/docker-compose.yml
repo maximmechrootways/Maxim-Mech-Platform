@@ -1,0 +1,86 @@
+name: gx10-local-rag
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: localrag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: localrag
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localrag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://localrag:${POSTGRES_PASSWORD}@db:5432/localrag
+      OLLAMA_URL: http://ollama:11434
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      EMBED_DIMENSIONS: ${EMBED_DIMENSIONS:-1024}
+      API_KEY: ${GX10_API_KEY:?set in .env}
+      UPLOAD_PASSCODE: ${UPLOAD_PASSCODE:-}
+      DATA_DIR: /data
+    volumes:
+      - ${DATA_DIR:-/srv/local-rag}:/data
+    ports:
+      - "8080:8080"
+
+  # SMB share so laptops on the LAN can drop files into the watched inbox:
+  #   \\192.168.1.198\inbox  (user: maxim / SAMBA_PASSWORD)
+  samba:
+    image: ghcr.io/servercontainers/samba:latest
+    restart: unless-stopped
+    environment:
+      ACCOUNT_maxim: ${SAMBA_PASSWORD:?set in .env}
+      SAMBA_VOLUME_CONFIG_inbox: "[inbox]; path=/shares/inbox; valid users = maxim; guest ok = no; read only = no; browseable = yes"
+      SAMBA_CONF_LOG_LEVEL: "1"
+      MODEL: "TimeCapsule"
+    volumes:
+      - ${DATA_DIR:-/srv/local-rag}/inbox:/shares/inbox
+    ports:
+      - "445:445"
+
+  # Outbound-only tunnel: exposes the api service as e.g. https://gx10.maximmech.com
+  # Create the tunnel in Cloudflare Zero Trust dashboard, point it at http://api:8080,
+  # and paste the token into .env. No inbound ports or router changes needed.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set in .env}
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  ollama_models:

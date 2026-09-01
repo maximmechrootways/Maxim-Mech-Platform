@@ -1,0 +1,111 @@
+src/api/elevatingPlatform.ts(1,21): error TS2307: Cannot find module './index' or its corresponding type declarations.
+src/App.tsx(34,1): error TS6133: 'JobManagement' is declared but its value is never read.
+src/App.tsx(35,1): error TS6133: 'JobDetail' is declared but its value is never read.
+src/components/auth/SessionPanel.tsx(39,22): error TS18048: 'session.jwt' is possibly 'undefined'.
+src/components/frank/FrankChat.tsx(18,9): error TS6133: 'user' is declared but its value is never read.
+src/components/pdf/PdfPageRenderer.tsx(29,3): error TS6133: 'scale' is declared but its value is never read.
+src/components/SigningChain.tsx(1,1): error TS6133: 'FormSignatory' is declared but its value is never read.
+src/components/SigningChain.tsx(1,10): error TS2305: Module '"@/types"' has no exported member 'FormSignatory'.
+src/contexts/EmployeesContext.tsx(217,18): error TS2304: Cannot find name 'MOCK_EMPLOYEES'.
+src/contexts/PinnedSafetyContext.tsx(39,10): error TS6133: 'hasFetched' is declared but its value is never read.
+src/contexts/RootCauseContext.tsx(17,10): error TS6133: 'hasFetched' is declared but its value is never read.
+src/contexts/RootCauseContext.tsx(91,7): error TS2741: Property 'loadData' is missing in type '{ getByLinked: () => undefined; fetchForInjury: () => Promise<null>; saveForInjury: (_: string, payload: RootCausePayload) => Promise<{ id: string; linkedType: "injury"; ... 4 more ...; analyzedAt: string; }>; loading: false; error: null; }' but required in type 'RootCauseContextValue'.
+src/data/mock.ts(14,3): error TS6196: 'JobAssignment' is declared but never used.
+src/data/mock.ts(18,3): error TS6196: 'SubcontractorPersonnelCertification' is declared but never used.
+src/pages/admin/AdminCertificates.tsx(80,9): error TS6198: All destructured elements are unused.
+src/pages/admin/AdminCertificates.tsx(82,49): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/admin/AdminCertificates.tsx(129,10): error TS6133: 'pdfDataUrl' is declared but its value is never read.
+src/pages/admin/AdminCertificates.tsx(211,83): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/pages/admin/AdminCertificates.tsx(424,46): error TS7006: Parameter 'x' implicitly has an 'any' type.
+src/pages/admin/AdminCertificates.tsx(431,34): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/pages/admin/AdminSignableForms.tsx(109,60): error TS2339: Property 'role' does not exist on type '{ id: string; name: string; }'.
+src/pages/admin/FormFromPdfEditor.tsx(56,10): error TS6133: 'pageSize' is declared but its value is never read.
+src/pages/admin/ScannedForms.tsx(10,27): error TS6133: 'refetch' is declared but its value is never read.
+src/pages/daily-forms/DailyForms.tsx(98,9): error TS6133: 'today' is declared but its value is never read.
+src/pages/daily-forms/DailyHazardAnalysis.tsx(111,40): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/daily-forms/DailyHazardAnalysis.tsx(115,39): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/daily-forms/DailyHazardAnalysis.tsx(115,102): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/daily-forms/DailyHazardAnalysis.tsx(143,43): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/pages/daily-forms/DailyHazardAnalysis.tsx(222,34): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/pages/daily-forms/DailyHazardAnalysis.tsx(467,37): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/daily-forms/DailyHazardAnalysis.tsx(467,65): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/daily-forms/DailyHazardAnalysis.tsx(487,81): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/dashboards/DashboardHR.tsx(71,45): error TS2345: Argument of type '{ id: string; templateName: string | undefined; title: string | undefined; submittedBy: string | undefined; }[]' is not assignable to parameter of type 'SetStateAction<{ id: string; templateName: string; title?: string | undefined; submittedBy?: string | undefined; }[]>'.
+  Type '{ id: string; templateName: string | undefined; title: string | undefined; submittedBy: string | undefined; }[]' is not assignable to type '{ id: string; templateName: string; title?: string | undefined; submittedBy?: string | undefined; }[]'.
+    Type '{ id: string; templateName: string | undefined; title: string | undefined; submittedBy: string | undefined; }' is not assignable to type '{ id: string; templateName: string; title?: string | undefined; submittedBy?: string | undefined; }'.
+      Types of property 'templateName' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+src/pages/dashboards/DashboardHR.tsx(82,9): error TS6133: 'complianceDue' is declared but its value is never read.
+src/pages/dashboards/DashboardOwner.tsx(29,45): error TS2345: Argument of type '{ id: string; templateName: string | undefined; title: string | undefined; submittedBy: string | undefined; }[]' is not assignable to parameter of type 'SetStateAction<{ id: string; templateName: string; title?: string | undefined; submittedBy?: string | undefined; }[]>'.
+  Type '{ id: string; templateName: string | undefined; title: string | undefined; submittedBy: string | undefined; }[]' is not assignable to type '{ id: string; templateName: string; title?: string | undefined; submittedBy?: string | undefined; }[]'.
+    Type '{ id: string; templateName: string | undefined; title: string | undefined; submittedBy: string | undefined; }' is not assignable to type '{ id: string; templateName: string; title?: string | undefined; submittedBy?: string | undefined; }'.
+      Types of property 'templateName' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+src/pages/dashboards/DashboardOwner.tsx(196,37): error TS2339: Property 'severity' does not exist on type '{ id: string; title?: string | undefined; siteName?: string | undefined; status?: string | undefined; }'.
+src/pages/dashboards/DashboardOwner.tsx(196,72): error TS2339: Property 'severity' does not exist on type '{ id: string; title?: string | undefined; siteName?: string | undefined; status?: string | undefined; }'.
+src/pages/documents/DocumentDetail.tsx(206,86): error TS2339: Property 'subject' does not exist on type 'never'.
+src/pages/documents/DocumentDetail.tsx(207,64): error TS2339: Property 'messages' does not exist on type 'never'.
+src/pages/documents/DocumentDetail.tsx(207,100): error TS2339: Property 'status' does not exist on type 'never'.
+src/pages/employees/EmployeeDetail.tsx(281,9): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/pages/employees/EmployeeDetail.tsx(286,9): error TS18048: 'updates' is possibly 'undefined'.
+src/pages/employees/EmployeeDetail.tsx(290,13): error TS18048: 'updates' is possibly 'undefined'.
+src/pages/employees/EmployeeDetail.tsx(292,13): error TS18048: 'updates' is possibly 'undefined'.
+src/pages/employees/EmployeeDetail.tsx(297,41): error TS2345: Argument of type 'Partial<Omit<Employee, "id">> | undefined' is not assignable to parameter of type 'Partial<Omit<Employee, "id">>'.
+  Type 'undefined' is not assignable to type 'Partial<Omit<Employee, "id">>'.
+src/pages/employees/EmployeesList.tsx(1,20): error TS6133: 'useEffect' is declared but its value is never read.
+src/pages/employees/EmployeesList.tsx(80,43): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/employees/EmployeesList.tsx(83,14): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/employees/EmployeesList.tsx(90,40): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/employees/EmployeesList.tsx(91,41): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/employees/EmployeesList.tsx(180,30): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/forms/ElevatingPlatformInspection.tsx(9,1): error TS6133: 'useUser' is declared but its value is never read.
+src/pages/forms/FormFill.tsx(1,52): error TS6133: 'useMemo' is declared but its value is never read.
+src/pages/forms/FormFill.tsx(83,10): error TS6133: 'pageSize' is declared but its value is never read.
+src/pages/forms/FormFill.tsx(98,10): error TS6133: 'isSigningWorker' is declared but its value is never read.
+src/pages/forms/FormFill.tsx(202,11): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(203,14): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(240,54): error TS7006: Parameter 'w' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(489,8): error TS6196: 'Section' is declared but never used.
+src/pages/forms/FormFill.tsx(695,42): error TS7006: Parameter 'w' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(696,39): error TS7006: Parameter 'w' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(856,37): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(856,65): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(869,36): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(869,101): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/forms/FormFill.tsx(948,27): error TS6133: 'borderClass' is declared but its value is never read.
+src/pages/forms/FormFill.tsx(1037,25): error TS6133: 'borderClass' is declared but its value is never read.
+src/pages/jobs/JobDetail.tsx(11,3): error TS6133: 'addSubcontractor' is declared but its value is never read.
+src/pages/jobs/JobDetail.tsx(12,3): error TS6133: 'removeSubcontractor' is declared but its value is never read.
+src/pages/jobs/JobDetail.tsx(37,10): error TS6133: 'subcontractors' is declared but its value is never read.
+src/pages/jobs/JobDetail.tsx(315,55): error TS2339: Property 'siteName' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(318,28): error TS2339: Property 'firstAiderName' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(318,120): error TS2339: Property 'firstAiderName' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(318,150): error TS2339: Property 'firstAiderPhone' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(318,188): error TS2339: Property 'firstAiderPhone' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(319,28): error TS2339: Property 'emergencyContact' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(319,128): error TS2339: Property 'emergencyContact' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(320,28): error TS2339: Property 'meetingPoint' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(320,120): error TS2339: Property 'meetingPoint' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(321,28): error TS2339: Property 'nearestHospital' does not exist on type 'never'.
+src/pages/jobs/JobDetail.tsx(321,126): error TS2339: Property 'nearestHospital' does not exist on type 'never'.
+src/pages/library/Library.tsx(81,10): error TS6133: 'loadingTemplates' is declared but its value is never read.
+src/pages/library/Library.tsx(135,9): error TS6133: 'openAssignModal' is declared but its value is never read.
+src/pages/library/Library.tsx(231,9): error TS6133: 'visibleTemplates' is declared but its value is never read.
+src/pages/library/Library.tsx(263,9): error TS6133: 'filteredSubmissions' is declared but its value is never read.
+src/pages/library/LibraryDocumentUpload.tsx(30,10): error TS6133: 'fileDataUrl' is declared but its value is never read.
+src/pages/safety/DailyHazardAnalysisDetail.tsx(3,28): error TS6133: 'CardDescription' is declared but its value is never read.
+src/pages/safety/IncidentReportNew.tsx(86,33): error TS7006: Parameter 'em' implicitly has an 'any' type.
+src/pages/safety/IncidentReportNew.tsx(198,33): error TS7006: Parameter 'emp' implicitly has an 'any' type.
+src/pages/safety/InspectionResultDetail.tsx(41,118): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/pages/safety/SafetyObservationsList.tsx(15,25): error TS6133: 'loading' is declared but its value is never read.
+src/utils/compliance.ts(76,3): error TS6133: 'employee' is declared but its value is never read.
+src/utils/compliance.ts(77,3): error TS6133: 'docs' is declared but its value is never read.

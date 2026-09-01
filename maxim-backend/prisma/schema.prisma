@@ -1,0 +1,1975 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
+}
+
+model User {
+  id                         String    @id @default(uuid())
+  email                      String    @unique
+  passwordHash               String?
+  firstName                  String
+  lastName                   String
+  phone                      String?
+  jobTitle                   String?
+  department                 String?
+  role                       String    @default("user") // owner | hr | supervisor | labourer
+  employmentStatus           String? // active | on-leave | terminated; when terminated, isActive is false
+  onLeaveStartedAt           DateTime? // when status = on-leave
+  terminatedAt               DateTime? // when status = terminated
+  isActive                   Boolean   @default(true)
+  hasCompletedSetup          Boolean   @default(false)
+  /// HR-visible hire date (distinct from account createdAt when backfilled)
+  hireDate                   DateTime?
+  /// Employee date of birth (stored as a DateTime, but treated as a YYYY-MM-DD calendar day in UI)
+  birthday                    DateTime?
+  /// Emergency contact #1 details for employee incidents.
+  emergencyContactName       String?
+  emergencyContactPhone      String?
+  /// How contact #1 relates to the employee (e.g. spouse, parent).
+  emergencyContactRelationship String?
+  /// Emergency contact #2 details for employee incidents.
+  emergencyContact2Name      String?
+  emergencyContact2Phone     String?
+  /// How contact #2 relates to the employee.
+  emergencyContact2Relationship String?
+  emergencyNotes             String?
+  createdAt                  DateTime  @default(now())
+  lastLogin                  DateTime?
+  googleCalendarRefreshToken String? // Google Calendar API (each user connects their own)
+  googleCalendarConnectedAt  DateTime?
+  emailNotificationsEnabled  Boolean   @default(true)
+  uiPreferences              Json      @default("{}")
+  composioUserId             String?
+
+  refreshTokens                   RefreshToken[]
+  loginAttempts                   LoginAttempt[]
+  documents                       Document[]
+  createdJobs                     Job[]            @relation("JobCreatedBy")
+  jobSupervisorLinks              JobSupervisor[]
+  jobAssignments                  JobAssignment[]  @relation("LabourerAssignment")
+  jobAssignmentsAssigned          JobAssignment[]  @relation("AssignmentAssignedBy")
+  jobCheckIns                     JobCheckIn[]
+  siteSupervisorLinks             SiteSupervisor[]
+  siteLabourerAssignments         SiteAssignment[] @relation("SiteLabourerAssignment")
+  siteLabourerAssignmentsAssigned SiteAssignment[] @relation("SiteAssignmentAssignedBy")
+
+  formSignatories                FormSignatory[]
+  scannedPdfs                    ScannedPdf[]
+  signableTemplates              SignableFormTemplate[]
+  formSubmissions                FormSubmission[]              @relation("FormSubmissionSubmitter")
+  formSubmissionsReviewed        FormSubmission[]              @relation("FormSubmissionReviewer")
+  signableSubmissions            SignableFormSubmission[]
+  libraryDocuments               LibraryDocument[]             @relation("LibraryDocumentUploader")
+  projectDocumentFoldersCreated  ProjectDocumentFolder[]       @relation("ProjectDocumentFolderCreator")
+  inviteCodes                    InviteCode[]                  @relation("InviteCreator")
+  pdfTemplatesCreated            PdfTemplate[]                 @relation("TemplateCreator")
+  pdfSubmissions                 PdfSubmission[]               @relation("PdfSubmissionSubmitter")
+  pdfSubmissionSignatures        PdfSubmissionSigner[]
+  importedToolboxTopics          ToolboxTopic[]                @relation("ToolboxTopicImportedBy")
+  employeeDocuments              EmployeeDocument[]            @relation("EmployeeDocumentSubject")
+  uploadedEmployeeDocuments      EmployeeDocument[]            @relation("EmployeeDocumentUploader")
+  dailyFormAssignmentsAssignedTo FormAssignment[]              @relation("FormAssignmentAssignee")
+  dailyFormAssignmentsCreated    FormAssignment[]              @relation("FormAssignmentCreator")
+  pdfFormAssignmentsCreated      PdfFormAssignment[]           @relation("PdfFormAssignmentAssigner")
+  pdfFormAssignmentsReceived     PdfFormAssignment[]           @relation("PdfFormAssignmentAssignee")
+  ElevatingPlatformInspection    ElevatingPlatformInspection[]
+  composioConnectedAccounts      ComposioConnectedAccount[]
+  notificationEmailDeliveries    NotificationEmailDelivery[]
+  dhaPresets                     DhaPreset[]
+  hazardRiskSubmissions          HazardRiskAssessmentSubmission[]
+  hazardReviewComments           HazardReviewComment[]            @relation("HazardReviewCommentAuthor")
+  hazardReviewHrRemarks          HazardReviewComment[]            @relation("HazardReviewHrRemarkBy")
+  hazardReviewCustomDocuments    HazardReviewCustomDocument[]     @relation("HazardReviewCustomUploader")
+  productFeedback                ProductFeedback[]
+  productFeedbackComments        ProductFeedbackComment[]
+  timeOffAsLabourer              TimeOffEntry[]                   @relation("TimeOffLabourer")
+  timeOffCreated                 TimeOffEntry[]                   @relation("TimeOffCreator")
+  timeOffRequests                TimeOffRequest[]                 @relation("TimeOffRequestRequester")
+  timeOffRequestsReviewed        TimeOffRequest[]                 @relation("TimeOffRequestReviewer")
+  offlineSubcontractorFormsUploaded OfflineSubcontractorForm[]   @relation("OfflineSubcontractorFormUploader")
+  employeeWorkSessions           EmployeeWorkSession[]
+  employeeWorkSessionsClockedInBy  EmployeeWorkSession[] @relation("WorkSessionClockInBy")
+  employeeWorkSessionsClockedOutBy EmployeeWorkSession[] @relation("WorkSessionClockOutBy")
+  estimationProjectFilesUploaded    EstimationProjectFile[] @relation("EstimationProjectFileUploader")
+  incomingInvoicesReviewed       IncomingInvoice[]                @relation("IncomingInvoiceReviewer")
+  outgoingInvoicesReviewed       OutgoingInvoice[]                @relation("OutgoingInvoiceReviewer")
+}
+
+enum EstimationPricingFolder {
+  TENDER_DRAWINGS
+  TENDER_SPECS
+  ADDENDUMS
+  SUPPLIER_COSTS
+  UNIT_PRICING_MATRIX
+  FINAL_COST
+  CHANGE_ORDERS
+  PAST_ADDENDUMS
+  CONTRACT
+  CORRESPONDENCE_RFI
+  SPECIFICATIONS
+  AS_BUILT_TENDER_DRAWINGS
+}
+
+/// Estimating / pricing project files (tender packs, matrices, etc.) — owner, HR, supervisors.
+model EstimationProjectFile {
+  id             String                  @id @default(uuid())
+  folder         EstimationPricingFolder
+  name           String
+  siteId         String?
+  site           Site?                   @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  filePath       String
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  notes          String?
+  uploadedById   String
+  uploadedBy     User                    @relation("EstimationProjectFileUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt      DateTime                @default(now())
+
+  @@index([folder])
+  @@index([siteId])
+  @@index([createdAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model LoginAttempt {
+  id          String   @id @default(uuid())
+  email       String
+  ipAddress   String
+  success     Boolean
+  attemptedAt DateTime @default(now())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, attemptedAt])
+}
+
+model ProductFeedback {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userName     String
+  userEmail    String
+  userRole     String
+  message      String
+  pageUrl      String?
+  completed    Boolean  @default(false)
+  completedAt  DateTime?
+  forwardedAt  DateTime?
+  forwardError String?
+  createdAt    DateTime @default(now())
+  comments     ProductFeedbackComment[]
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ProductFeedbackComment {
+  id         String          @id @default(cuid())
+  feedbackId String
+  feedback   ProductFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorName String
+  body       String
+  createdAt  DateTime        @default(now())
+
+  @@index([feedbackId, createdAt])
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Document {
+  id            String   @id @default(uuid())
+  filename      String
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  filePath      String
+  uploadedById  String
+  uploadedBy    User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  uploadedAt    DateTime @default(now())
+  status        String   @default("uploaded")
+  extractedText String?
+  docType       String   @default("other")
+
+  @@index([uploadedById])
+  @@index([status])
+  @@index([docType])
+}
+
+// HR/Owner: PDFs attached to an employee (licenses, training, hiring docs)
+model EmployeeDocument {
+  id           String   @id @default(uuid())
+  employeeId   String
+  employee     User     @relation("EmployeeDocumentSubject", fields: [employeeId], references: [id], onDelete: Cascade)
+  category     String // license | certification | training | hiring
+  filePath     String
+  originalName String
+  mimeType     String?
+  sizeBytes    Int?
+  uploadedById String
+  uploadedBy   User     @relation("EmployeeDocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  uploadedAt   DateTime @default(now())
+  expiresAt    String? // YYYY-MM-DD for licenses/certs
+  completedAt  String? // YYYY-MM-DD for training
+  displayName  String? // optional label (e.g. "Working at Heights")
+  licenseNumber String? // licence / certificate number (license category only)
+  certificateId String? // linked global Certificate (training category)
+  hoursCompleted Float? // training duration in hours
+  trainingFacility String? // where the training was completed
+
+  @@index([employeeId])
+  @@index([category])
+  @@index([certificateId])
+}
+
+// Phase 2: Jobs, sites, assignments
+model Site {
+  id               String  @id @default(uuid())
+  name             String
+  address          String?
+  meetingPoint     String?
+  nearestHospital  String?
+  firstAiderName   String?
+  firstAiderPhone  String?
+  emergencyContact String?
+  active           Boolean @default(true) // false = inactive (soft delete), hidden from default lists
+
+  jobs                        Job[]
+  libraryDocuments            LibraryDocument[]
+  siteSupervisors             SiteSupervisor[]
+  siteLabourers               SiteAssignment[]
+  ElevatingPlatformInspection ElevatingPlatformInspection[]
+  equipment                   Equipment[]
+  employeeWorkSessions       EmployeeWorkSession[]
+  estimationProjectFiles    EstimationProjectFile[]
+}
+
+/// Job-site heavy equipment tracking (maintenance schedule, costs, insurance).
+model Equipment {
+  id                      String   @id @default(uuid())
+  name                    String
+  modelNumber             String?
+  serialNumber            String?
+  tag                     String?
+  manufacturer            String?
+  siteId                  String?
+  site                    Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  /// monthly | weekly | quarterly | daily | annual | before_use
+  maintenanceSchedule     String   @default("monthly")
+  costAtPurchase          Decimal? @db.Decimal(14, 2)
+  dateOfPurchase          DateTime?
+  /// Linked form submission IDs (equipment inspection forms from completed forms).
+  inspectionSubmissionIds String[] @default([])
+
+  maintenanceRecords EquipmentMaintenanceRecord[]
+  costEntries        EquipmentCostEntry[]
+  insurancePolicies  EquipmentInsurance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteId])
+  @@index([name])
+}
+
+model EquipmentMaintenanceRecord {
+  id                       String    @id @default(uuid())
+  equipmentId              String
+  equipment                  Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  hoursAtLastMaintenance     Decimal?  @db.Decimal(14, 2)
+  mileage                    Decimal?  @db.Decimal(14, 2)
+  descriptionOfWork          String?
+  partsReplacedOrRepaired    String?
+  technicianNameOrNumber     String?
+  maintenanceCompany         String?
+  dateMaintenanceRequired    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([equipmentId])
+}
+
+model EquipmentCostEntry {
+  id                   String    @id @default(uuid())
+  equipmentId          String
+  equipment            Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  maintenancePerformed String?
+  labourCost           Decimal?  @db.Decimal(14, 2)
+  materialCost         Decimal?  @db.Decimal(14, 2)
+  warrantyCovered      Boolean   @default(false)
+  totalCost            Decimal?  @db.Decimal(14, 2)
+  invoiceFilePath      String?
+  invoiceOriginalName  String?
+  invoiceMimeType      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([equipmentId])
+}
+
+model EquipmentInsurance {
+  id                  String    @id @default(uuid())
+  equipmentId       String
+  equipment           Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  policyOrCertificate String?
+  expiryDate          String? // YYYY-MM-DD
+  policyFilePath      String?
+  policyOriginalName  String?
+  policyMimeType      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([equipmentId])
+}
+
+/// Company fleet automobile insurance (Ontario certificate of insurance).
+model FleetCarInsurancePolicy {
+  id                  String   @id @default("fleet-default")
+  insurerName         String?
+  policyNumber        String?
+  transactionType     String?
+  effectiveDate       String?
+  periodStart         String?
+  periodEnd           String?
+  numberOfAutomobiles Int?
+  premium             Decimal? @db.Decimal(14, 2)
+  paymentMethod       String?
+  insuredName         String?
+  insuredAddress      String?
+  brokerName          String?
+  brokerId            String?
+  brokerAddress       String?
+  brokerPhone         String?
+  remarks             String?
+  liabilityLimit      String?
+
+  vehicles FleetCarInsuranceVehicle[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FleetCarInsuranceVehicle {
+  id                          String                  @id @default(uuid())
+  policyId                    String                  @default("fleet-default")
+  policy                      FleetCarInsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  autoNo                      Int
+  modelYear                   Int?
+  make                        String?
+  model                       String?
+  newCostIncludingEquipment   Decimal?                @db.Decimal(14, 2)
+  vin                         String?
+  location                    String?
+  ratingClass                 String?
+  rateGroupAb                 String?
+  rateGroupCompSp             String?
+  rateGroupDcPd               String?
+  rateGroupColAp              String?
+  liabilityBodilyInjuryPrem   Decimal?                @db.Decimal(14, 2)
+  liabilityPropertyDamagePrem Decimal?                @db.Decimal(14, 2)
+  basicAccidentBenefitsPrem   Decimal?                @db.Decimal(14, 2)
+  uninsuredAutomobilePrem     Decimal?                @db.Decimal(14, 2)
+  sortOrder                   Int                     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([policyId, autoNo])
+  @@index([policyId])
+}
+
+model SiteSupervisor {
+  id     String @id @default(uuid())
+  siteId String
+  userId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, userId])
+  @@index([siteId])
+  @@index([userId])
+}
+
+model SiteAssignment {
+  id           String   @id @default(uuid())
+  siteId       String
+  userId       String
+  assignedById String
+  assignedAt   DateTime @default(now())
+  site         Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user         User     @relation("SiteLabourerAssignment", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy   User     @relation("SiteAssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@unique([siteId, userId])
+  @@index([siteId])
+  @@index([userId])
+}
+
+model Job {
+  id          String   @id @default(uuid())
+  title       String
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  status      String   @default("active") // active | completed | on-hold
+  gate        String?
+  createdById String
+  createdBy   User     @relation("JobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  supervisors                   JobSupervisor[]
+  labourers                     JobAssignment[]
+  checkIns                      JobCheckIn[]
+  subcontractors                SubcontractorJobAssignment[]
+  subcontractorPersonnel        SubcontractorPersonnelJobAssignment[]
+  ElevatingPlatformInspection   ElevatingPlatformInspection[]
+  SubcontractorPersonnelCheckIn SubcontractorPersonnelCheckIn[]
+  libraryDocuments              LibraryDocument[]
+  projectDocumentFolders        ProjectDocumentFolder[]
+  hazardRiskSubmissions         HazardRiskAssessmentSubmission[]
+  employeeWorkSessions          EmployeeWorkSession[]
+  incomingInvoices              IncomingInvoice[]
+  outgoingInvoices              OutgoingInvoice[]
+
+  @@index([siteId])
+  @@index([createdById])
+  @@index([status])
+}
+
+model JobSupervisor {
+  id     String @id @default(uuid())
+  jobId  String
+  userId String
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@index([jobId])
+  @@index([userId])
+}
+
+model JobAssignment {
+  id           String   @id @default(uuid())
+  jobId        String
+  userId       String
+  assignedById String
+  assignedAt   DateTime @default(now())
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user         User     @relation("LabourerAssignment", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy   User     @relation("AssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@unique([jobId, userId])
+  @@index([jobId])
+  @@index([userId])
+}
+
+model JobCheckIn {
+  id           String    @id @default(uuid())
+  jobId        String
+  userId       String
+  date         String // YYYY-MM-DD
+  checkedInAt  DateTime?
+  checkedOutAt DateTime?
+  job          Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId, date])
+  @@index([jobId])
+  @@index([userId])
+  @@index([date])
+}
+
+/// PDFs/photos of paper forms received from subcontractors (no platform access). Not tied to a Subcontractor profile.
+model OfflineSubcontractorForm {
+  id             String   @id @default(uuid())
+  title          String
+  filePath       String
+  originalName   String
+  mimeType       String?
+  sizeBytes      Int?
+  uploadedById   String
+  uploadedBy     User     @relation("OfflineSubcontractorFormUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt      DateTime @default(now())
+
+  @@index([uploadedById])
+  @@index([createdAt])
+}
+
+model Subcontractor {
+  id                            String  @id @default(uuid())
+  companyName                   String
+  officeContactName             String  @default("")
+  officeContactEmail            String  @default("")
+  officeContactPhone            String?
+  siteContactName               String?
+  siteContactEmail              String?
+  siteContactPhone              String?
+  status                        String  @default("active") // active | inactive
+  notes                         String?
+  usingMaximHSManual            Boolean @default(false)
+  hsPdfFilePath                 String?
+  hsPdfOriginalName             String?
+  wsibInjuryReportPath          String?
+  wsibInjuryReportOriginalName  String?
+  hrSafetyAgreementPath         String?
+  hrSafetyAgreementOriginalName String?
+  form1000Path                  String?
+  form1000OriginalName          String?
+
+  jobAssignments SubcontractorJobAssignment[]
+  certifications SubcontractorCertification[]
+  injuryReports  InjuryReport[]
+  personnel      SubcontractorPersonnel[]
+  contracts      SubcontractorContract[]
+  insurances     SubcontractorInsurance[]
+  employeeWorkSessions EmployeeWorkSession[]
+}
+
+model SubcontractorInsurance {
+  id              String   @id @default(uuid())
+  subcontractorId String
+  type            String // COI | WSIB | Other
+  policyNumber    String?
+  expiresAt       String? // YYYY-MM-DD
+  status          String   @default("active") // active | expired
+  filePath        String?
+  originalName    String?
+  uploadedAt      DateTime @default(now())
+
+  subcontractor Subcontractor @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
+
+  @@index([subcontractorId])
+  @@index([expiresAt])
+}
+
+model SubcontractorPersonnel {
+  id                     String        @id @default(uuid())
+  subcontractorId        String
+  name                   String
+  email                  String?
+  isSupervisor           Boolean       @default(false)
+  status                 String        @default("active") // active | on-leave | inactive | terminated
+  orientationLocation    String?
+  orientationCompletedAt DateTime?
+  subcontractor          Subcontractor @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
+
+  certifications                SubcontractorPersonnelCertification[]
+  jobAssignments                SubcontractorPersonnelJobAssignment[]
+  documents                     SubcontractorPersonnelDocument[]
+  contracts                     SubcontractorContract[]
+  SubcontractorPersonnelCheckIn SubcontractorPersonnelCheckIn[]
+  employeeWorkSessions          EmployeeWorkSession[]
+
+  @@index([subcontractorId])
+}
+
+model SubcontractorPersonnelCertification {
+  id          String                 @id @default(uuid())
+  personnelId String
+  name        String
+  issuedAt    String // YYYY-MM-DD
+  expiresAt   String // YYYY-MM-DD
+  status      String                 @default("current")
+  fileName    String?
+  filePath    String?
+  personnel   SubcontractorPersonnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+
+  @@index([personnelId])
+  @@index([expiresAt])
+}
+
+model SubcontractorPersonnelJobAssignment {
+  id                     String                 @id @default(uuid())
+  personnelId            String
+  jobId                  String
+  assignedAt             DateTime               @default(now())
+  orientationCompletedAt DateTime?
+  personnel              SubcontractorPersonnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  job                    Job                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([personnelId, jobId])
+  @@index([personnelId])
+  @@index([jobId])
+}
+
+model SubcontractorPersonnelCheckIn {
+  id           String                 @id @default(uuid())
+  personnelId  String
+  jobId        String
+  date         String // YYYY-MM-DD
+  checkedInAt  DateTime?
+  checkedOutAt DateTime?
+  personnel    SubcontractorPersonnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  job          Job                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([personnelId])
+  @@index([jobId])
+  @@index([date])
+}
+
+model SubcontractorContract {
+  id              String                  @id @default(uuid())
+  subcontractorId String
+  personnelId     String?
+  subcontractor   Subcontractor           @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
+  personnel       SubcontractorPersonnel? @relation(fields: [personnelId], references: [id], onDelete: SetNull)
+  startDate       String // YYYY-MM-DD
+  endDate         String? // YYYY-MM-DD
+  filePath        String
+  originalName    String
+  uploadedAt      DateTime                @default(now())
+
+  @@index([subcontractorId])
+  @@index([personnelId])
+}
+
+model SubcontractorPersonnelDocument {
+  id          String                 @id @default(uuid())
+  personnelId String
+  personnel   SubcontractorPersonnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  name        String
+  category    String                 @default("contract") // contract | other
+  filePath    String
+  uploadedAt  DateTime               @default(now())
+
+  @@index([personnelId])
+}
+
+// Phase 1.3: Subcontractor company certifications (with expiry)
+model SubcontractorCertification {
+  id              String        @id @default(uuid())
+  subcontractorId String
+  name            String
+  issuedAt        String // YYYY-MM-DD
+  expiresAt       String // YYYY-MM-DD
+  status          String        @default("current") // current | expiring-soon | expired
+  fileName        String?
+  filePath        String?
+  subcontractor   Subcontractor @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
+
+  @@index([subcontractorId])
+  @@index([expiresAt])
+}
+
+model SubcontractorJobAssignment {
+  id              String        @id @default(uuid())
+  jobId           String
+  subcontractorId String
+  assignedById    String
+  assignedAt      DateTime      @default(now())
+  job             Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  subcontractor   Subcontractor @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, subcontractorId])
+  @@index([jobId])
+  @@index([subcontractorId])
+}
+
+// Phase 2: Form templates (PDF-based)
+model ScannedPdf {
+  id           String   @id @default(uuid())
+  name         String
+  filePath     String
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  uploadedAt   DateTime @default(now())
+
+  signableTemplates SignableFormTemplate[]
+
+  @@index([uploadedById])
+}
+
+model SignableFormTemplate {
+  id                String      @id @default(uuid())
+  name              String
+  description       String      @default("")
+  sourcePdfId       String?
+  sourcePdf         ScannedPdf? @relation(fields: [sourcePdfId], references: [id], onDelete: SetNull)
+  schedule          String      @default("daily") // daily | weekly | monthly | once
+  assignedToRoles   Json        @default("[]") // string[]
+  assignedToUserIds Json        @default("[]") // string[]
+  placedFields      Json        @default("[]") // PlacedFormField[]
+  createdById       String
+  createdBy         User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt         DateTime    @default(now())
+  active            Boolean     @default(true)
+
+  signableSubmissions SignableFormSubmission[] @relation("SignableFormSubmissions")
+  formAssignments     FormAssignment[]
+
+  @@index([sourcePdfId])
+  @@index([createdById])
+}
+
+// Supervisor (or HR) assigns a template to specific user(s); shows in assignee's Daily forms for the due date / period
+model FormAssignment {
+  id                     String               @id @default(uuid())
+  signableFormTemplateId String
+  signableFormTemplate   SignableFormTemplate @relation(fields: [signableFormTemplateId], references: [id], onDelete: Cascade)
+  assignedToUserId       String
+  assignedTo             User                 @relation("FormAssignmentAssignee", fields: [assignedToUserId], references: [id], onDelete: Cascade)
+  assignedById           String
+  assignedBy             User                 @relation("FormAssignmentCreator", fields: [assignedById], references: [id], onDelete: Restrict)
+  dueDate                String // YYYY-MM-DD
+  schedule               String               @default("daily") // daily | monthly | yearly — which tab it appears in
+  status                 String               @default("pending") // pending | completed
+  createdAt              DateTime             @default(now())
+
+  passedFromId     String?
+  passedFrom       FormAssignment?  @relation("PassChain", fields: [passedFromId], references: [id])
+  passedTo         FormAssignment[] @relation("PassChain")
+  formDataSnapshot Json?
+  signedPdfUrl     String?
+  note             String?
+
+  submission SignableFormSubmission?
+
+  signatories       FormSignatory[]
+  currentStep       Int             @default(0)
+  chainStatus       String          @default("pending")
+  finalSignedPdfUrl String?
+  forwardedToHRAt   DateTime?
+  forwardedToHRById String?
+
+  @@index([assignedToUserId])
+  @@index([assignedById])
+  @@index([signableFormTemplateId])
+  @@index([dueDate])
+}
+
+model FormSignatory {
+  id           String @id @default(cuid())
+  assignmentId String
+  userId       String
+  order        Int
+  status       String @default("pending")
+
+  signedAt       DateTime?
+  signatureUrl   String?
+  fieldValues    Json?
+  signatoryName  String?
+  pdfSnapshotUrl String?
+
+  assignment FormAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id])
+
+  @@unique([assignmentId, order])
+  @@unique([assignmentId, userId])
+}
+
+// Phase 2: Section-based form submissions (incident, near-miss, hazard, site meeting)
+model FormSubmission {
+  id              String    @id @default(uuid())
+  templateId      String // references template (e.g. t1, t2) - string for flexibility
+  templateName    String
+  status          String    @default("draft") // draft | pending_site_signatures | submitted | approved | rejected | archived
+  submittedById   String?
+  submittedBy     User?     @relation("FormSubmissionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  submittedAt     DateTime?
+  reviewedById    String?
+  reviewedBy      User?     @relation("FormSubmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  reviewComment   String?
+  siteId          String?
+  siteName        String?
+  fieldValues     Json      @default("{}")
+  workflowType    String?   @default("standard") // standard | site_meeting
+  siteSignerIds   Json      @default("[]")
+  siteSignatures  Json      @default("[]")
+  auditEvents     Json      @default("[]")
+  archivedAt      DateTime?
+  archivedBy      String?
+  submittedToHrAt DateTime?
+  lastOpenedAt    DateTime?
+  lastOpenedBy    String?
+  lastEditedAt    DateTime?
+  lastEditedBy    String?
+
+  @@index([templateId])
+  @@index([submittedById])
+  @@index([status])
+}
+
+// Phase 2: PDF-based signable form submissions
+model SignableFormSubmission {
+  id                String    @id @default(uuid())
+  signableFormId    String
+  templateName      String
+  dailyFormId       String? // or derived
+  submittedById     String
+  submittedBy       User      @relation(fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt       DateTime  @default(now())
+  fieldValues       Json      @default("{}")
+  signatureText     String?
+  signatureFilePath String?
+  geoLat            Float?
+  geoLng            Float?
+  geoAddress        String?
+  workflowType      String?   @default("standard")
+  siteSignerIds     Json      @default("[]")
+  siteSignatures    Json      @default("[]")
+  submittedToHrAt   DateTime?
+
+  assignmentId String?         @unique
+  assignment   FormAssignment? @relation(fields: [assignmentId], references: [id])
+
+  signableTemplate SignableFormTemplate @relation("SignableFormSubmissions", fields: [signableFormId], references: [id], onDelete: Restrict)
+
+  @@index([signableFormId])
+  @@index([submittedById])
+}
+
+// Phase 2: Signature requests (documents waiting for signature)
+model SignatureRequest {
+  id              String @id @default(uuid())
+  documentName    String
+  dueDate         String // YYYY-MM-DD
+  remindersSent   Int    @default(0)
+  requiredSigners Json // [{ id, name, role, status, userId?, signedAt? }]
+  status          String @default("pending") // pending | completed
+
+  @@index([status])
+}
+
+// User-created folders for project documents (per job, optional nesting)
+model ProjectDocumentFolder {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  name        String
+  parentId    String?
+  parent      ProjectDocumentFolder?  @relation("ProjectDocumentFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    ProjectDocumentFolder[] @relation("ProjectDocumentFolderTree")
+  createdById String
+  createdBy   User     @relation("ProjectDocumentFolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  documents LibraryDocument[]
+
+  @@index([jobId])
+  @@index([parentId])
+}
+
+// Phase 2: Library documents (visibility, site, type - for Library "documents" view)
+model LibraryDocument {
+  id               String    @id @default(uuid())
+  name             String
+  type             String    @default("other")
+  siteId           String?
+  site             Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  jobId            String?
+  job              Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  folderId         String?
+  folder           ProjectDocumentFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  date             String // YYYY-MM-DD or similar
+  filePath         String
+  uploadedById     String
+  uploadedBy       User      @relation("LibraryDocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  visibility       String    @default("everyone") // everyone | restricted
+  visibleToRoles   Json      @default("[]")
+  visibleToUserIds Json      @default("[]")
+  tags             Json      @default("[]")
+  version          Int       @default(1)
+  extractedText    String?
+  acknowledgedBy   Json      @default("[]")
+  lastOpenedAt     DateTime?
+  lastOpenedBy     String?
+  lastEditedAt     DateTime?
+  lastEditedBy     String?
+  createdAt        DateTime  @default(now())
+
+  chunks DocumentChunk[]
+
+  @@index([uploadedById])
+  @@index([siteId])
+  @@index([jobId])
+  @@index([folderId])
+  @@index([visibility])
+}
+
+/// Cache Autodesk APS Model Derivative translations for CAD files (DWG/DXF/RVT/…).
+model CadDerivative {
+  id           String   @id @default(uuid())
+  /// e.g. local:<gx10DocId> | library:<id> | estimation:<id>
+  sourceKey    String   @unique
+  fileName     String
+  contentSha256 String?
+  objectKey    String?
+  /// Base64url URN for APS Viewer (without padding)
+  urn          String?
+  status       String   @default("pending") // pending | uploading | translating | success | failed
+  progress     String?
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+}
+
+// RAG: chunked document text + embeddings for semantic search (pgvector)
+model DocumentChunk {
+  id             String                       @id @default(cuid())
+  content        String
+  embedding      Unsupported("vector(1024)")?
+  documentId     String
+  document       LibraryDocument              @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentName   String
+  sourceFilePath String // blob name (e.g. documents/xxx.pdf) for SAS URL when needed
+  pageNumber     Int?
+  chunkIndex     Int
+  organisationId String? // optional; no Organisation model yet — for future multi-tenant scoping
+  createdAt      DateTime                     @default(now())
+
+  @@index([documentId])
+  @@index([organisationId])
+}
+
+// Phase 1.3: Injury reports
+model InjuryReport {
+  id                 String    @id @default(uuid())
+  jobId              String?
+  siteId             String?
+  siteName           String
+  reportedById       String
+  reportedBy         String // display name
+  reportedAt         DateTime  @default(now())
+  status             String    @default("draft") // draft | submitted | under-review | closed
+  severity           String // minor | moderate | major
+  description        String
+  followUpNotes      String?
+  injuredPersonName  String?
+  injuredPersonId    String?
+  injuryType         String? // laceration | sprain | burn | etc.
+  bodyPart           String?
+  mechanism          String?
+  dateOfInjury       String?
+  lostTime           Boolean   @default(false)
+  daysAwayFromWork   Int?
+  restrictedDutyDays Int?
+  wsibReported       Boolean   @default(false)
+  wsibClaimNumber    String?
+  wsibReportedAt     DateTime?
+  subcontractorId    String?
+  photoUrl           String?
+
+  subcontractor Subcontractor? @relation(fields: [subcontractorId], references: [id], onDelete: SetNull)
+
+  @@index([reportedById])
+  @@index([status])
+  @@index([jobId])
+  @@index([subcontractorId])
+  @@index([reportedAt])
+}
+
+// Phase 1.3: Root cause analysis (linked to injury or incident)
+model RootCauseAnalysis {
+  id                 String   @id @default(uuid())
+  linkedType         String // injury | incident
+  linkedId           String // InjuryReport.id or incident id
+  immediateCause     String
+  contributingCauses Json     @default("[]") // string[]
+  underlyingCause    String?
+  analyzedById       String
+  analyzedBy         String
+  analyzedAt         DateTime @default(now())
+
+  @@unique([linkedType, linkedId])
+  @@index([linkedType, linkedId])
+}
+
+// Phase 1.3: HR/employee certificates (with expiry)
+model Certificate {
+  id                       String    @id @default(uuid())
+  name                     String
+  holderName               String
+  holderUserId             String?
+  issueDate                String? // YYYY-MM-DD optional
+  expirationDate           String? // YYYY-MM-DD optional
+  uploadedById             String
+  uploadedBy               String
+  uploadedAt               DateTime  @default(now())
+  fileName                 String?
+  filePath                 String?
+  employeeDocumentId       String? // mirrored training record on employee profile
+  expirationReminderSentAt DateTime?
+
+  @@index([uploadedById])
+  @@index([expirationDate])
+  @@index([holderUserId])
+  @@index([employeeDocumentId])
+}
+
+// HR-managed training course catalog (dropdown options + Excel columns)
+model TrainingCourseType {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, isPrimary, sortOrder])
+  @@index([name])
+}
+
+// --- Safety & compliance (incidents, near-miss, hazards, observations, CAPA, alerts, inspections, calendar) ---
+
+model Incident {
+  id                String   @id @default(uuid())
+  title             String
+  siteId            String?
+  siteName          String
+  date              String // YYYY-MM-DD
+  status            String   @default("open") // open | under-review | closed
+  severity          String? // low | medium | high
+  incidentType      String? // injury | near-miss | property-damage | environmental | other
+  severityLevel     Int? // 1-5
+  equipmentInvolved String?
+  description       String?
+  reportedById      String?
+  reportedBy        String?
+  reportedAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  specificArea               String?
+  employeesInvolved          Json?    @default("[]")
+  actionsTaken               String?
+  correctiveActionsCompleted Boolean? @default(false)
+  photos                     Json?    @default("[]")
+  documents                  Json?    @default("[]")
+  employeeSignature          String?
+  reportedBySignature        String?
+  supervisorSignature        String?
+  signatureMeta              Json? // { employee?: { name, timestamp }, reportedBy?: { name, timestamp }, supervisor?: { name, timestamp } }
+
+  @@index([siteId])
+  @@index([status])
+  @@index([date])
+}
+
+model NearMiss {
+  id                    String    @id @default(uuid())
+  siteId                String?
+  siteName              String
+  reportedBy            String
+  reportedById          String?
+  reportedAt            DateTime  @default(now())
+  description           String
+  status                String    @default("open") // open | under-review | closed
+  followUpNotes         String?
+  correctiveAction      String?
+  correctiveActionDate  DateTime?
+  reportCompletedBy     String?
+
+  @@index([siteId])
+  @@index([status])
+}
+
+model HazardReport {
+  id                  String    @id @default(uuid())
+  siteId              String?
+  siteName            String
+  jobId               String?
+  title               String
+  description         String
+  reportedBy          String
+  reportedById        String?
+  reportedAt          DateTime  @default(now())
+  status              String    @default("open") // open | in-progress | closed
+  assignedTo          String?
+  dueDate             String? // YYYY-MM-DD
+  closedAt            DateTime?
+  likelihood          Int? // 1-5
+  impact              Int? // 1-5
+  riskLevel           String? // low | medium | high | critical
+  recommendedControls Json      @default("[]") // [{ id, description, status, completedAt? }]
+  createdAt           DateTime  @default(now())
+
+  @@index([siteId])
+  @@index([status])
+}
+
+model DailyHazardSubmission {
+  id                       String   @id @default(uuid())
+  date                     String // YYYY-MM-DD
+  projectId                String
+  projectTitle             String?
+  siteName                 String?
+  musterPoint              String?
+  supervisorId             String?
+  supervisorName           String?
+  jobNumber                String?
+  activities               Json     @default("[]") // string[]
+  hazards                  Json     @default("[]")
+  controls                 Json     @default("[]")
+  ppe                      Json     @default("[]")
+  weatherTemp              String?
+  weatherConditions        Json     @default("[]") // ["rain","snow","wind","lightning"]
+  nearestHospital          String?
+  emergencyCoordinator     String?
+  jobHazardAssessment      Json     @default("[]") // [{ job, hazard, riskRatingRequired, control }]
+  workplaceViolence        Json     @default("[]") // [{ question, answer }]
+  workplaceViolenceActions String?
+  toolsReplaced            String?
+  additionalComments       String?
+  signatures               Json     @default("[]") // [{ id, name, timestamp, dataUrl }]
+  submittedById            String?
+  submittedBy              String?
+  submittedAt              DateTime @default(now())
+  /// HR/Owner review: marked approved from the Daily Hazard Analysis detail page.
+  approved                 Boolean   @default(false)
+  approvedAt               DateTime?
+  approvedById             String?
+  approvedByName           String?
+
+  @@index([date])
+  @@index([projectId])
+  @@index([approved])
+}
+
+model DhaPreset {
+  id          String   @id @default(uuid())
+  name        String
+  data        Json     @default("{}")
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdById])
+}
+
+model SafetyObservation {
+  id           String   @id @default(uuid())
+  siteId       String?
+  siteName     String
+  type         String // positive | corrective
+  description  String
+  observedBy   String
+  observedById String?
+  observedAt   DateTime @default(now())
+  photoUrl     String?
+
+  @@index([siteId])
+  @@index([type])
+}
+
+model CorrectiveAction {
+  id          String    @id @default(uuid())
+  actionType  String // corrective | preventive
+  sourceType  String // injury | incident | near-miss | hazard
+  sourceId    String
+  title       String
+  description String
+  assignedTo  String
+  dueDate     String // YYYY-MM-DD
+  status      String    @default("open") // open | in-progress | completed
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([sourceType, sourceId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model SafetyAlert {
+  id             String   @id @default(uuid())
+  title          String
+  body           String
+  siteNames      Json     @default("[]") // string[]
+  roles          Json     @default("[]") // string[] e.g. ['owner','hr','supervisor','labourer']
+  publishedById  String?
+  publishedAt    DateTime @default(now())
+  expiresAt      String? // YYYY-MM-DD
+  acknowledgedBy Json     @default("[]") // { userId, at }[]
+  readBy         Json     @default("[]") // { userId, at }[]
+
+  @@index([publishedAt])
+}
+
+model InspectionSchedule {
+  id             String   @id @default(uuid())
+  title          String
+  siteId         String?
+  siteName       String?
+  checklistId    String // reference to checklist definition
+  frequency      String // weekly | monthly | quarterly
+  nextDue        String // YYYY-MM-DD
+  assignedToRole String?
+  createdAt      DateTime @default(now())
+
+  @@index([nextDue])
+}
+
+model InspectionResult {
+  id            String   @id @default(uuid())
+  scheduleId    String
+  title         String
+  siteId        String?
+  siteName      String?
+  completedAt   DateTime @default(now())
+  completedById String?
+  completedBy   String?
+  items         Json     @default("[]") // InspectionChecklistItem[]
+  submissionId  String?
+
+  @@index([scheduleId])
+  @@index([completedAt])
+}
+
+model InspectionAttachment {
+  id           String   @id @default(uuid())
+  scheduleId   String? // optional: attach to a specific schedule or general
+  filePath     String
+  originalName String
+  mimeType     String?
+  sizeBytes    Int?
+  notes        String?
+  uploadedById String
+  uploadedAt   DateTime @default(now())
+
+  @@index([scheduleId])
+  @@index([uploadedById])
+}
+
+model ComplianceCalendarEvent {
+  id        String   @id @default(uuid())
+  type      String // certificate_expiry | inspection_due | report_deadline | regulatory | etc.
+  title     String
+  dueDate   String // YYYY-MM-DD
+  siteName  String?
+  recordId  String?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([dueDate])
+  @@index([type])
+}
+
+// --- Audit log (write-only, immutable) ---
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String
+  userName    String
+  action      String // created | updated | deleted | viewed | etc.
+  entityType  String // form | injury | incident | user | subcontractor | capa | certificate | etc.
+  entityId    String
+  entityLabel String?
+  linkTo      String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// --- HR Todo (replaces localStorage) ---
+model HRTodoItem {
+  id          String    @id @default(uuid())
+  userId      String // HR user who owns the todo
+  title       String
+  recurrence  String // daily | weekly | monthly
+  dueDate     String // YYYY-MM-DD
+  dueTime     String? // HH:mm
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  linkTo      String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([dueDate])
+}
+
+// --- In-app notifications (backend-created events) ---
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String // recipient
+  title     String
+  body      String
+  type      String    @default("info") // info | alert | reminder
+  linkTo    String?
+  read      Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+}
+
+model ComposioConnectedAccount {
+  id                 String   @id @default(uuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolkit            String   @default("gmail")
+  authConfigId       String?
+  connectedAccountId String   @unique
+  status             String   @default("PENDING") // PENDING | ACTIVE | EXPIRED | INACTIVE | FAILED
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  lastSyncedAt       DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@unique([userId, toolkit])
+}
+
+model IncomingInvoiceIngestionJob {
+  id                 String   @id @default(uuid())
+  gmailMessageId     String   @unique
+  gmailThreadId      String?
+  triggerPayload     Json?
+  status             String   @default("PENDING") // PENDING | PROCESSING | RETRYING | COMPLETED | FAILED | IGNORED
+  attempts           Int      @default(0)
+  maxAttempts        Int      @default(5)
+  nextAttemptAt      DateTime @default(now())
+  processingLockedAt DateTime?
+  lastErrorMessage   String?
+  ignoreReason       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([processingLockedAt])
+}
+
+model IncomingInvoice {
+  id              String   @id @default(uuid())
+  gmailMessageId  String
+  sourceSequence  Int      @default(0)
+  documentType    String   @default("INVOICE") // INVOICE | RECEIPT | STATEMENT
+  relatedInvoiceId String?
+  relatedInvoice  IncomingInvoice?  @relation("InvoiceReceiptLink", fields: [relatedInvoiceId], references: [id], onDelete: SetNull)
+  linkedReceipts  IncomingInvoice[] @relation("InvoiceReceiptLink")
+  gmailThreadId   String?
+  emailSubject    String?
+  emailBodyText   String?
+  emailBodyHtml   String?
+  emailFrom       String?
+  emailTo         String?
+  receivedAt      DateTime?
+  status          String   @default("READY") // PROCESSING | READY | FAILED
+  processingError String?
+  processedAt     DateTime?
+  vendorName      String?
+  invoiceNumber   String?
+  invoiceDate     DateTime?
+  dueDate         DateTime?
+  subtotal        Decimal? @db.Decimal(14, 2)
+  taxAmount       Decimal? @db.Decimal(14, 2)
+  totalAmount     Decimal? @db.Decimal(14, 2)
+  currency        String?
+  poNumber        String?
+  jobReference    String?
+  jobId           String?
+  job             Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  paidAt          DateTime?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  reviewedBy      User?    @relation("IncomingInvoiceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  paymentTerms    String?
+  notes           String?
+  extractedData   Json?
+  searchText      String?
+  gmailLabeledAt  DateTime?
+  attachments     IncomingInvoiceAttachment[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([vendorName])
+  @@index([invoiceNumber])
+  @@index([invoiceDate])
+  @@index([totalAmount])
+  @@index([receivedAt])
+  @@index([status])
+  @@index([createdAt])
+  @@index([jobId])
+  @@index([paidAt])
+  @@index([reviewedAt])
+  @@index([reviewedById])
+  @@index([documentType])
+  @@index([relatedInvoiceId])
+  @@unique([gmailMessageId, sourceSequence])
+}
+
+model IncomingInvoiceAttachment {
+  id                String          @id @default(uuid())
+  invoiceId         String
+  invoice           IncomingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  attachmentIndex   Int             @default(0)
+  gmailAttachmentId String?
+  filePath          String
+  originalName      String
+  mimeType          String?
+  sizeBytes         Int?
+  ocrText           String?
+  createdAt         DateTime        @default(now())
+
+  @@index([invoiceId])
+}
+
+model IncomingInvoiceSyncCursor {
+  id                 String   @id @default("default")
+  processedLabelId   String?
+  processedLabelName String   @default("Maxim/Processed")
+  composioTriggerId  String?
+  connectedAccountId String?
+  lastSyncedAt       DateTime?
+  updatedAt          DateTime @updatedAt
+}
+
+model OutgoingInvoiceIngestionJob {
+  id                 String   @id @default(uuid())
+  gmailMessageId     String   @unique
+  gmailThreadId      String?
+  triggerPayload     Json?
+  status             String   @default("PENDING") // PENDING | PROCESSING | RETRYING | COMPLETED | FAILED | IGNORED
+  attempts           Int      @default(0)
+  maxAttempts        Int      @default(5)
+  nextAttemptAt      DateTime @default(now())
+  processingLockedAt DateTime?
+  lastErrorMessage   String?
+  ignoreReason       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([processingLockedAt])
+}
+
+model OutgoingInvoice {
+  id              String   @id @default(uuid())
+  gmailMessageId  String
+  sourceSequence  Int      @default(0)
+  gmailThreadId   String?
+  emailSubject    String?
+  emailBodyText   String?
+  emailBodyHtml   String?
+  emailFrom       String?
+  emailTo         String?
+  sentAt          DateTime?
+  status          String   @default("SENT") // SENT | PAID | OVERDUE | PARTIAL | READY | FAILED
+  processingError String?
+  processedAt     DateTime?
+  customerName    String?
+  invoiceNumber   String?
+  invoiceDate     DateTime?
+  dueDate         DateTime?
+  subtotal        Decimal? @db.Decimal(14, 2)
+  taxAmount       Decimal? @db.Decimal(14, 2)
+  totalAmount     Decimal? @db.Decimal(14, 2)
+  paidAmount      Decimal? @db.Decimal(14, 2)
+  currency        String?  @default("CAD")
+  orderNumber     String?
+  supplierNumber  String?
+  projectName     String?
+  jobId           String?
+  job             Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  paidAt          DateTime?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  reviewedBy      User?    @relation("OutgoingInvoiceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  paymentTerms    String?
+  notes           String?
+  extractedData   Json?
+  searchText      String?
+  gmailLabeledAt  DateTime?
+  lastReminderAt  DateTime?
+  attachments     OutgoingInvoiceAttachment[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([customerName])
+  @@index([invoiceNumber])
+  @@index([invoiceDate])
+  @@index([dueDate])
+  @@index([totalAmount])
+  @@index([sentAt])
+  @@index([status])
+  @@index([createdAt])
+  @@index([jobId])
+  @@index([paidAt])
+  @@index([reviewedAt])
+  @@index([reviewedById])
+  @@unique([gmailMessageId, sourceSequence])
+}
+
+model OutgoingInvoiceAttachment {
+  id                String          @id @default(uuid())
+  invoiceId         String
+  invoice           OutgoingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  attachmentIndex   Int             @default(0)
+  gmailAttachmentId String?
+  filePath          String
+  originalName      String
+  mimeType          String?
+  sizeBytes         Int?
+  ocrText           String?
+  createdAt         DateTime        @default(now())
+
+  @@index([invoiceId])
+}
+
+model OutgoingInvoiceSyncCursor {
+  id                 String   @id @default("default")
+  processedLabelId   String?
+  processedLabelName String   @default("Maxim/OutgoingProcessed")
+  composioTriggerId  String?
+  connectedAccountId String?
+  lastSyncedAt       DateTime?
+  updatedAt          DateTime @updatedAt
+}
+
+model NotificationEmailDelivery {
+  id                 String   @id @default(uuid())
+  notificationId     String
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Which per-user notification toggle must be on for this email to send (mirrors User.uiPreferences.notificationPreferences).
+  emailPreferenceKey String?
+  toEmail            String
+  subject            String
+  bodyText           String?
+  bodyHtml           String?
+  idempotencyKey     String   @unique
+  status             String   @default("PENDING") // PENDING | PROCESSING | RETRYING | SENT | FAILED | SKIPPED
+  attempts           Int      @default(0)
+  maxAttempts        Int      @default(5)
+  nextAttemptAt      DateTime @default(now())
+  lastAttemptAt      DateTime?
+  sentAt             DateTime?
+  providerMessageId  String?
+  lastErrorCode      String?
+  lastErrorMessage   String?
+  skipReason         String?
+  processingLockedAt DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([notificationId])
+  @@index([userId])
+  @@index([status, nextAttemptAt])
+  @@index([processingLockedAt])
+}
+
+model TimeOffEntry {
+  id          String   @id @default(uuid())
+  labourerId  String
+  labourer    User     @relation("TimeOffLabourer", fields: [labourerId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User     @relation("TimeOffCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  reason      String
+  compensation String  @default("paid")
+  startDate   DateTime
+  endDate     DateTime
+  totalDays   Int
+  notes       String?
+  createdAt   DateTime @default(now())
+  fromRequest TimeOffRequest?
+
+  @@index([labourerId])
+  @@index([createdById])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([createdAt])
+}
+
+/// Employee-submitted vacation / day-off request awaiting Owner/HR approval.
+model TimeOffRequest {
+  id              String    @id @default(uuid())
+  requesterId     String
+  requester       User      @relation("TimeOffRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reason          String
+  compensation    String    @default("paid") // paid | unpaid
+  startDate       DateTime
+  endDate         DateTime
+  totalDays       Int
+  notes           String?
+  status          String    @default("pending") // pending | approved | denied | cancelled
+  reviewedById    String?
+  reviewedBy      User?     @relation("TimeOffRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  reviewNotes     String?
+  timeOffEntryId  String?   @unique
+  timeOffEntry    TimeOffEntry? @relation(fields: [timeOffEntryId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([requesterId])
+  @@index([status])
+  @@index([startDate])
+  @@index([createdAt])
+}
+
+/// Clock in/out sessions for Maxim employees (`User`). Links to Sites, Jobs, optional subcontractor attribution; overlaps with Time off are blocked at clock-in.
+model EmployeeWorkSession {
+  id                         String                  @id @default(uuid())
+  userId                     String
+  user                       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteId                     String?
+  site                       Site?                   @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  jobId                      String?
+  job                        Job?                    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  subcontractorId            String?
+  subcontractor             Subcontractor?          @relation(fields: [subcontractorId], references: [id], onDelete: SetNull)
+  subcontractorPersonnelId   String?
+  subcontractorPersonnel     SubcontractorPersonnel? @relation(fields: [subcontractorPersonnelId], references: [id], onDelete: SetNull)
+  startedAt                  DateTime
+  endedAt                    DateTime?
+  startNote                  String?
+  endNote                    String?
+  startLatitude              Float?
+  startLongitude             Float?
+  startAccuracyM             Float?
+  endLatitude                Float?
+  endLongitude               Float?
+  endAccuracyM               Float?
+  /// Maxim user who tapped clock in / bulk sign-on for this labourer row.
+  clockInByUserId            String?
+  clockInBy                  User?                   @relation("WorkSessionClockInBy", fields: [clockInByUserId], references: [id], onDelete: SetNull)
+  /// Maxim user who tapped clock out (or ended on behalf).
+  clockOutByUserId           String?
+  clockOutBy                 User?                   @relation("WorkSessionClockOutBy", fields: [clockOutByUserId], references: [id], onDelete: SetNull)
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([siteId])
+  @@index([jobId])
+  @@index([endedAt])
+}
+
+model FormQrCode {
+  id           String   @id @default(uuid())
+  slug         String   @unique
+  label        String
+  targetPath   String
+  isActive     Boolean  @default(true)
+  createdById  String
+  scanCount    Int      @default(0)
+  lastScannedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([createdById])
+}
+
+// --- PDF Template Editor (upload, place fields, submissions) ---
+enum FieldType {
+  TEXT
+  DATE
+  SIGNATURE
+  CHECKBOX
+  NUMBER
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  AWAITING_SIGNATURES
+  RESUBMIT_REQUIRED
+}
+
+/// Source document for a persisted quality finding (extend for Daily Hazard, etc.).
+enum QualityFindingSource {
+  PDF_SUBMISSION
+}
+
+enum QualityFindingSeverity {
+  warning
+  critical
+}
+
+/// HR/Owner-visible flags derived from submitted form answers (e.g. checklist "substandard").
+model SubmissionQualityFinding {
+  id                   String                 @id @default(cuid())
+  sourceType           QualityFindingSource
+  sourceId             String
+  ruleCode             String
+  ruleVersion          Int                    @default(1)
+  severity             QualityFindingSeverity @default(warning)
+  templateId           String?
+  templateNameSnapshot String?
+  fieldId              String?
+  fieldLabelSnapshot   String?
+  valueSnapshot        String?
+  contextJson          Json?
+  linkedJobId          String?
+  siteTextSnapshot     String?
+  detectedAt           DateTime               @default(now())
+  acknowledgedAt       DateTime?
+  acknowledgedById     String?
+
+  @@index([sourceType, sourceId])
+  @@index([detectedAt])
+  @@index([templateId])
+  @@index([acknowledgedAt])
+}
+
+model PdfTemplate {
+  id              String              @id @default(cuid())
+  name            String
+  description     String?
+  filePath        String
+  pageCount       Int                 @default(1)
+  assignedRoles   String[]
+  assignedUserIds String[]
+  isActive        Boolean             @default(true)
+  fields          PdfField[]
+  submissions     PdfSubmission[]
+  assignments     PdfFormAssignment[]
+  createdById     String
+  createdBy       User                @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt       DateTime            @default(now())
+
+  @@index([createdById])
+}
+
+model PdfField {
+  id         String      @id @default(cuid())
+  templateId String
+  template   PdfTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  type       FieldType
+  label      String
+  page       Int         @default(1)
+  x          Float
+  y          Float
+  width      Float
+  height     Float
+  required   Boolean     @default(false)
+
+  @@index([templateId])
+}
+
+model PdfSubmission {
+  id                   String                @id @default(cuid())
+  templateId           String
+  template             PdfTemplate           @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  selectedToolboxTopicId String?
+  selectedToolboxTopic ToolboxTopic?         @relation(fields: [selectedToolboxTopicId], references: [id], onDelete: SetNull)
+  title                String? // custom title set on submit for HR filtering
+  status               SubmissionStatus      @default(DRAFT)
+  submittedById        String?
+  submittedBy          User?                 @relation("PdfSubmissionSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  submittedAt          DateTime?
+  resubmissionReason   String?
+  resubmissionRequestedAt DateTime?
+  resubmissionRequestedById String?
+  resubmittedAt        DateTime?
+  resubmissionHistory  Json                  @default("[]")
+  fieldValues          Json                  @default("{}")
+  signatureText        String?
+  pdfBlobPath          String?
+  finalPdfBlobPath     String?
+  // Optional extra PDF attachment uploaded while filling out the form (e.g. toolbox talk supporting docs).
+  extraPdfBlobPath     String?
+  // Original uploaded file name for display/download.
+  extraPdfOriginalName String?
+  finalizedAt          DateTime?
+  createdAt            DateTime              @default(now())
+  signers              PdfSubmissionSigner[]
+
+  @@index([templateId])
+  @@index([status])
+  @@index([submittedById])
+  @@index([selectedToolboxTopicId])
+}
+
+model PdfSubmissionSigner {
+  id                 String        @id @default(cuid())
+  submissionId       String
+  submission         PdfSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  labourerUserId     String
+  labourer           User          @relation(fields: [labourerUserId], references: [id], onDelete: Cascade)
+  signatureStatus    String        @default("pending") // pending | signed
+  signatureImageData String?
+  signedAt           DateTime?
+  createdAt          DateTime      @default(now())
+
+  @@unique([submissionId, labourerUserId])
+  @@index([submissionId])
+  @@index([labourerUserId])
+  @@index([signatureStatus])
+}
+
+model ToolboxTopic {
+  id             String    @id @default(cuid())
+  sourceProvider String    @default("IHSA")
+  sourcePageUrl  String?
+  sourcePdfUrl   String
+  sourcePdfHash  String?
+  topicTitle     String
+  category       String?
+  summary        String?
+  keyPoints      Json      @default("[]")
+  rawExtract     String?
+  importStatus   String    @default("READY") // READY | FAILED | PENDING
+  importError    String?
+  batchTag       String?
+  lastImportedAt DateTime?
+  isActive       Boolean   @default(true)
+  importedById   String?
+  importedBy     User?     @relation("ToolboxTopicImportedBy", fields: [importedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  submissions    PdfSubmission[]
+
+  @@unique([sourceProvider, sourcePdfUrl])
+  @@index([isActive, topicTitle])
+  @@index([batchTag])
+  @@index([importStatus])
+}
+
+// --- PDF Form Assignment (supervisor assigns PDF template to labourers) ---
+model PdfFormAssignment {
+  id                String      @id @default(cuid())
+  templateId        String
+  template          PdfTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  assignedById      String
+  assignedBy        User        @relation("PdfFormAssignmentAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedToId      String
+  assignedTo        User        @relation("PdfFormAssignmentAssignee", fields: [assignedToId], references: [id], onDelete: Cascade)
+  dueDate           String? // YYYY-MM-DD
+  recurrence        String?     @default("once") // once | daily | weekly | monthly
+  note              String?
+  status            String      @default("pending") // pending | in_progress | completed | reviewed | resubmission_required
+  submissionId      String? // FK to PdfSubmission once filled
+  reviewComment     String?
+  forwardedToHRAt   DateTime?
+  forwardedToHRById String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([templateId])
+  @@index([assignedById])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+// --- Invite codes (HR generates for whitelisted employees) ---
+model InviteCode {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  email       String
+  createdById String
+  createdBy   User      @relation("InviteCreator", fields: [createdById], references: [id])
+  usedById    String?
+  usedAt      DateTime?
+  expiresAt   DateTime
+  isUsed      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([code])
+  @@index([email])
+  @@index([createdById])
+}
+
+model ElevatingPlatformInspection {
+  id              String    @id @default(uuid())
+  status          String    @default("draft") // draft | submitted
+  submittedById   String
+  submittedBy     User      @relation(fields: [submittedById], references: [id], onDelete: Restrict)
+  jobId           String?
+  job             Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  siteId          String?
+  site            Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  checklistValues Json
+  createdAt       DateTime  @default(now())
+  submittedAt     DateTime?
+
+  @@index([submittedById])
+  @@index([status])
+  @@index([jobId])
+  @@index([siteId])
+}
+
+// --- Hazard Review (role-specific hazard risk assessment forms + shared message board) ---
+model HazardRiskAssessmentSubmission {
+  id            String    @id @default(cuid())
+  templateKey   String // office_engineer | general_labourer | office_management | plumber | welder | gas_fitter
+  submittedById String
+  submittedBy   User      @relation(fields: [submittedById], references: [id], onDelete: Cascade)
+  status        String    @default("DRAFT") // DRAFT | SUBMITTED
+  fieldValues   Json      @default("{}")
+  jobId         String?
+  job           Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  submittedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([templateKey])
+  @@index([submittedById])
+  @@index([status])
+  @@index([jobId])
+  @@index([createdAt])
+}
+
+model HazardReviewComment {
+  id           String    @id @default(cuid())
+  templateKey  String    @default("general_labourer")
+  body         String
+  authorId     String
+  author       User      @relation("HazardReviewCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+  hrRemark     String?
+  hrRemarkById String?
+  hrRemarkBy   User?     @relation("HazardReviewHrRemarkBy", fields: [hrRemarkById], references: [id], onDelete: SetNull)
+  hrRemarkAt   DateTime?
+
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([templateKey])
+}
+
+/// HR-uploaded hazard risk assessment PDFs (templateKey = id, used for routes and message boards).
+model HazardReviewCustomDocument {
+  id           String   @id @default(uuid())
+  shortLabel   String
+  filePath     String
+  uploadedById String
+  uploadedBy   User     @relation("HazardReviewCustomUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([uploadedById])
+}
+
+/// HR replacement PDF for a built-in hazard template (key = office_engineer, etc.).
+model HazardReviewStaticPdfOverride {
+  templateKey String   @id
+  filePath    String
+  updatedAt   DateTime @updatedAt
+}
+
+/// Built-in templates HR chose to remove from the hazard review library.
+model HazardReviewStaticTemplateHidden {
+  templateKey String   @id
+  createdAt   DateTime @default(now())
+}

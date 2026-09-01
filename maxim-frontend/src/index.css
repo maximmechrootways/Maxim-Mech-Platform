@@ -1,0 +1,271 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Outfit:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: 255 255 255;
+    --color-surface: 248 250 252;
+    --color-border: 226 232 240;
+    --color-text: 15 23 42;
+    --color-text-muted: 100 116 139;
+    --color-brand: 15 61 122;
+    --color-brand-light: 238 246 252;
+  }
+  .dark {
+    --color-bg: 12 16 28;
+    --color-surface: 22 28 42;
+    --color-border: 45 55 80;
+    --color-text: 241 245 250;
+    --color-text-muted: 148 163 184;
+    --color-brand: 147 197 253;
+    --color-brand-light: 30 58 138;
+  }
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply text-[rgb(var(--color-text))] font-sans transition-colors duration-300;
+  }
+}
+
+@layer components {
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  /* Light: soft blue tint, gradient mesh, subtle dot texture */
+  .bg-app {
+    background-color: #f4f6fa;
+  }
+  .bg-app-light {
+    background:
+      radial-gradient(ellipse 120% 80% at 50% -20%, rgb(238 246 252 / 0.95), transparent 50%),
+      radial-gradient(ellipse 80% 50% at 100% 50%, rgb(219 234 254 / 0.5), transparent 45%),
+      radial-gradient(ellipse 60% 40% at 0% 100%, rgb(226 232 250 / 0.6), transparent 40%),
+      linear-gradient(180deg, #fafbfd 0%, #f5f7fb 30%, #eef2f8 65%, #e8ecf4 100%);
+  }
+  .bg-app-light::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle at 1px 1px, rgb(148 163 184 / 0.06) 1px, transparent 0);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* Dark: deep navy base, subtle blue glow, premium feel */
+  .dark .bg-app {
+    background-color: #0a0e17;
+  }
+  .dark .bg-app-light {
+    background:
+      radial-gradient(ellipse 100% 60% at 50% -10%, rgb(30 58 138 / 0.25), transparent 45%),
+      radial-gradient(ellipse 80% 40% at 100% 0%, rgb(30 64 175 / 0.12), transparent 40%),
+      radial-gradient(ellipse 60% 50% at 0% 100%, rgb(51 65 85 / 0.2), transparent 45%),
+      linear-gradient(180deg, #0c1222 0%, #0f172a 30%, #131c2e 60%, #0f172a 100%);
+  }
+  .glass {
+    @apply backdrop-blur-xl border;
+  }
+  .glass {
+    background-color: rgb(255 255 255 / 0.85);
+    border-color: rgb(226 232 240 / 0.6);
+  }
+  .dark .glass {
+    background-color: rgb(22 28 42 / 0.85);
+    border-color: rgb(45 55 80 / 0.6);
+  }
+  .glass-card {
+    @apply backdrop-blur-sm shadow-soft;
+  }
+  .glass-card {
+    background-color: rgb(255 255 255 / 0.92);
+    border: 1px solid rgb(226 232 240 / 0.7);
+  }
+  .dark .glass-card {
+    background-color: rgb(30 36 52 / 0.92);
+    border-color: rgb(45 55 80 / 0.5);
+  }
+}
+
+/* Safe area for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+}
+
+/* Print: hide nav/header so Save as PDF only captures content */
+.print-only {
+  display: none;
+}
+.print-logo-preload {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media print {
+  .no-print,
+  header,
+  aside,
+  nav,
+  .sidebar,
+  .touch-target[aria-label="Toggle menu"],
+  .touch-target[aria-label="Close menu"],
+  .fixed {
+    display: none !important;
+  }
+  /* Mobile browsers can start the print snapshot before entrance animations finish.
+     Force fully-rendered content for print so we don't get blank pages. */
+  .animate-fade-in {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    /* Flex-1 main + print often collapses to 0 height; only fixed headers then print. */
+    display: block !important;
+    flex: none !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+  }
+  #root .min-h-screen.flex.flex-col > .flex.flex-1 {
+    display: block !important;
+    flex: none !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+  html, body {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  body { background: #fff; }
+  #root,
+  #root > div {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-only.print-flex-row {
+    display: flex !important;
+  }
+  .print-logo-banner {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin: 0 0 12px 0;
+    break-inside: avoid;
+  }
+  .print-logo-image {
+    width: 120px;
+    height: auto;
+    object-fit: contain;
+  }
+  .print-logo-banner svg {
+    width: 120px;
+    height: auto;
+    display: block;
+  }
+
+  /* Form review (Save as PDF): flat paper layout — no stacked glass cards or wide tables */
+  #form-review-pdf-print-root {
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    color-scheme: light !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    /* animate-fade-in starts at opacity:0; print can capture mid-animation and blank the page */
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  #form-review-pdf-print-root .shadow-soft,
+  #form-review-pdf-print-root .shadow-soft-lg,
+  #form-review-pdf-print-root .shadow-md,
+  #form-review-pdf-print-root .shadow-lg,
+  #form-review-pdf-print-root .shadow-xl,
+  #form-review-pdf-print-root .shadow-2xl,
+  #form-review-pdf-print-root .shadow-dark-soft,
+  #form-review-pdf-print-root .shadow-dark-glow {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  #form-review-pdf-print-root [class*='backdrop-blur'] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  #form-review-pdf-print-root .rounded-2xl,
+  #form-review-pdf-print-root .rounded-xl {
+    border-radius: 6px !important;
+  }
+
+  #form-review-pdf-print-root table {
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: auto !important;
+    font-size: 9.5pt !important;
+  }
+
+  #form-review-pdf-print-root .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  #form-review-pdf-print-root thead,
+  #form-review-pdf-print-root thead th {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+  }
+
+  #form-review-pdf-print-root tbody td {
+    background: #ffffff !important;
+  }
+
+  .dark #form-review-pdf-print-root {
+    color: #1f2937 !important;
+  }
+
+  .dark #form-review-pdf-print-root h1,
+  .dark #form-review-pdf-print-root h2,
+  .dark #form-review-pdf-print-root h3,
+  .dark #form-review-pdf-print-root h4 {
+    color: #0f172a !important;
+  }
+
+  .dark #form-review-pdf-print-root div.rounded-2xl.border {
+    background: #ffffff !important;
+    border-color: #d1d5db !important;
+  }
+
+  .form-review-pdf-print-page {
+    display: block !important;
+    width: 100% !important;
+    position: relative !important;
+    break-after: page;
+    page-break-after: always;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .form-review-pdf-print-page:last-child,
+  .form-review-pdf-print-page-last {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .form-review-pdf-print-page img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}

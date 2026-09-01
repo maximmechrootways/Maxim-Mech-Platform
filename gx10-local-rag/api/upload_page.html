@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maxim Local Archive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #1a2332;
+      --steel: #3d5a73;
+      --sand: #e8dfd0;
+      --ember: #c45c26;
+      --fog: rgba(26, 35, 50, 0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Instrument Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% 0%, rgba(196, 92, 38, 0.18), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 90% 100%, rgba(61, 90, 115, 0.2), transparent 50%),
+        linear-gradient(165deg, #f4efe6 0%, #d9e2ea 100%);
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    h1 { font-family: Newsreader, Georgia, serif; font-size: clamp(2.2rem, 5vw, 3.2rem); font-weight: 700; margin: 0 0 0.4rem; letter-spacing: -0.02em; }
+    .lede { color: var(--steel); font-size: 1.05rem; margin: 0 0 2rem; max-width: 36ch; line-height: 1.45; }
+    .drop {
+      border: 2px dashed rgba(61, 90, 115, 0.45);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.55);
+      backdrop-filter: blur(8px);
+      padding: 3rem 1.5rem;
+      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .drop.over { border-color: var(--ember); background: rgba(255,255,255,0.85); }
+    .drop strong { display: block; font-size: 1.15rem; margin-bottom: 0.35rem; }
+    .drop span { color: var(--steel); font-size: 0.95rem; }
+    label { display: block; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--steel); margin: 1.25rem 0 0.4rem; }
+    input[type="text"], input[type="password"] {
+      width: 100%; padding: 0.7rem 0.85rem; border: 1px solid rgba(61,90,115,0.3);
+      border-radius: 4px; font: inherit; background: rgba(255,255,255,0.8);
+    }
+    button {
+      margin-top: 1.25rem; width: 100%; padding: 0.85rem 1rem; border: 0; border-radius: 4px;
+      background: var(--ink); color: #f4efe6; font: inherit; font-weight: 600; cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .log { margin-top: 1.5rem; font-size: 0.9rem; color: var(--steel); white-space: pre-wrap; }
+    .hint { margin-top: 2rem; font-size: 0.85rem; color: var(--steel); line-height: 1.5; }
+    code { background: var(--fog); padding: 0.1em 0.35em; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Maxim Local Archive</h1>
+    <p class="lede">Drop a project folder from a USB stick. Top-level folder name becomes the project on maximmech.com.</p>
+
+    <label for="code">Upload code</label>
+    <input id="code" type="password" placeholder="Ask IT for the short code" autocomplete="off" />
+
+    <label for="project">Project name (optional if the folder already has one)</label>
+    <input id="project" type="text" placeholder="e.g. ONTC Station" />
+
+    <div id="drop" class="drop" style="margin-top:1.25rem">
+      <strong>Drop folders or files here</strong>
+      <span>or click to choose — nested structure is kept</span>
+      <input id="picker" type="file" multiple webkitdirectory directory style="display:none" />
+    </div>
+
+    <button id="go" type="button" disabled>Upload to GX10</button>
+    <div id="log" class="log"></div>
+    <p class="hint">
+      Prefer the desktop app or double-click <code>Upload USB to Maxim</code> on the burner laptop.
+      This page is a LAN fallback. Files land in the inbox and are indexed automatically.
+    </p>
+  </div>
+  <script>
+    const drop = document.getElementById("drop");
+    const picker = document.getElementById("picker");
+    const go = document.getElementById("go");
+    const logEl = document.getElementById("log");
+    const codeEl = document.getElementById("code");
+    const projectEl = document.getElementById("project");
+    let files = [];
+
+    function log(msg) { logEl.textContent = msg; }
+    function refresh() { go.disabled = files.length === 0 || !codeEl.value.trim(); }
+
+    drop.addEventListener("click", () => picker.click());
+    drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      drop.classList.remove("over");
+      files = [...e.dataTransfer.files];
+      log(files.length + " file(s) ready");
+      refresh();
+    });
+    picker.addEventListener("change", () => {
+      files = [...picker.files];
+      log(files.length + " file(s) ready");
+      refresh();
+    });
+    codeEl.addEventListener("input", refresh);
+
+    go.addEventListener("click", async () => {
+      const code = codeEl.value.trim();
+      const project = projectEl.value.trim();
+      go.disabled = true;
+      let ok = 0, fail = 0;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const rel = f.webkitRelativePath || f.name;
+        log(`Uploading ${i + 1}/${files.length}: ${rel}`);
+        const body = new FormData();
+        body.append("file", f);
+        body.append("relpath", rel);
+        if (project) body.append("project", project);
+        try {
+          const res = await fetch("/upload", {
+            method: "POST",
+            headers: { "X-Upload-Code": code },
+            body,
+          });
+          if (!res.ok) throw new Error(await res.text());
+          ok++;
+        } catch (err) {
+          fail++;
+          log(`Failed on ${rel}: ${err.message || err}`);
+          go.disabled = false;
+          return;
+        }
+      }
+      log(`Done. ${ok} uploaded${fail ? `, ${fail} failed` : ""}. Indexing runs automatically — ask Frank in a few minutes.`);
+      files = [];
+      refresh();
+    });
+  </script>
+</body>
+</html>

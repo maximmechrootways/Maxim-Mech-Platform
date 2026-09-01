@@ -1,0 +1,10 @@
+[Unit]
+Description=GX10 Local Archive tunnel watchdog (every 5 min)
+After=gx10-local-rag.service docker.service
+
+[Service]
+Type=oneshot
+User=maximmech
+Group=maximmech
+WorkingDirectory=/home/maximmech/gx10-local-rag
+ExecStart=/bin/bash /home/maximmech/gx10-local-rag/scripts/keep-alive.sh

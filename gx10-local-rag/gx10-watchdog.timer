@@ -1,0 +1,12 @@
+[Unit]
+Description=Run GX10 Local Archive watchdog every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=gx10-watchdog.service
+
+[Install]
+WantedBy=timers.target
