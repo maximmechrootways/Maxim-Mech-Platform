@@ -1,4 +1,3 @@
-/*
 !/maxim-backend/
 !/maxim-frontend/
 !/.github/
@@ -10,3 +9,4 @@ gx10-local-rag/desktop/dist/
 gx10-local-rag/desktop/dist-installer/
 __pycache__/
 *.pyc
+node_modules
