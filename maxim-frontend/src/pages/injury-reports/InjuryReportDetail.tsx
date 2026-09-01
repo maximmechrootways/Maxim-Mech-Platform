@@ -10,22 +10,17 @@ import { Badge } from '@/components/ui/Badge'
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
-import { fetchJobs } from '@/api/jobs'
+import { MOCK_JOBS } from '@/data/mock'
 import type { InjuryReport } from '@/types'
 
 export function InjuryReportDetail() {
   const { id } = useParams()
   const { user } = useUser()
-  const { getByLinked, fetchForInjury } = useRootCause()
-  const { getReport, fetchReport, updateReport } = useInjuryReports()
+  const { getByLinked } = useRootCause()
+  const { getReport, updateReport } = useInjuryReports()
   const { subcontractors } = useSubcontractors()
-  const [jobsList, setJobsList] = useState<{ id: string; title: string; siteName?: string }[]>([])
-  useEffect(() => {
-    fetchJobs().then(setJobsList).catch(() => setJobsList([]))
-  }, [])
   const report = id ? getReport(id) : undefined
   const rootCause = id ? getByLinked('injury', id) : undefined
-  const [loadingDetail, setLoadingDetail] = useState(false)
 
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState<Partial<InjuryReport>>({})
@@ -34,28 +29,7 @@ export function InjuryReportDetail() {
     if (report) setForm({ ...report })
   }, [report?.id, isEditing])
 
-  useEffect(() => {
-    if (!id || report) return
-    setLoadingDetail(true)
-    fetchReport(id)
-      .then(() => {})
-      .finally(() => setLoadingDetail(false))
-  }, [id, report, fetchReport])
-
-  useEffect(() => {
-    if (id && report) fetchForInjury(id).then(() => {})
-  }, [id, report?.id, fetchForInjury])
-
-  const canAccessInjuryReports = user?.role === 'hr' || user?.role === 'owner' || user?.role === 'supervisor'
-  if (!canAccessInjuryReports) return null
-  if (loadingDetail || (id && !report)) {
-    return (
-      <div className="space-y-4 animate-fade-in">
-        <Breadcrumbs items={[{ label: 'Injury reports', to: '/injury-reports' }, { label: '…' }]} />
-        <p className="text-neutral-500 dark:text-neutral-400">Loading…</p>
-      </div>
-    )
-  }
+  if (user?.role !== 'hr' && user?.role !== 'owner') return null
   if (!report) {
     return (
       <div className="space-y-4 animate-fade-in">
@@ -67,9 +41,9 @@ export function InjuryReportDetail() {
   }
 
   const r = report
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!id) return
-    await updateReport(id, {
+    updateReport(id, {
       siteName: form.siteName?.trim(),
       reportedBy: form.reportedBy?.trim(),
       reportedAt: form.reportedAt?.trim(),
@@ -104,7 +78,7 @@ export function InjuryReportDetail() {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </Link>
           <div>
-            <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Injury Report</h1>
+            <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Injury report</h1>
             <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">
               {!isEditing ? `${r.siteName} · ${r.reportedAt}` : 'Edit all fields below'}
             </p>
@@ -174,7 +148,7 @@ export function InjuryReportDetail() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Injury Type</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Injury type</label>
               <select value={form.injuryType ?? ''} onChange={(e) => setForm((f) => ({ ...f, injuryType: (e.target.value || undefined) as InjuryReport['injuryType'] }))} className="w-full min-h-[44px] px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white" title="Injury type">
                 <option value="">—</option>
                 <option value="laceration">Laceration</option>
@@ -189,7 +163,7 @@ export function InjuryReportDetail() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Body Part</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Body part</label>
               <select value={form.bodyPart ?? ''} onChange={(e) => setForm((f) => ({ ...f, bodyPart: (e.target.value || undefined) as InjuryReport['bodyPart'] }))} className="w-full min-h-[44px] px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white" title="Body part">
                 <option value="">—</option>
                 <option value="hand">Hand</option>
@@ -236,8 +210,8 @@ export function InjuryReportDetail() {
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Job (optional)</label>
               <select value={form.jobId ?? ''} onChange={(e) => setForm((f) => ({ ...f, jobId: e.target.value || undefined }))} className="w-full min-h-[44px] px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white">
                 <option value="">—</option>
-                {jobsList.map((j) => (
-                  <option key={j.id} value={j.id}>{j.title} — {j.siteName ?? '—'}</option>
+                {MOCK_JOBS.map((j) => (
+                  <option key={j.id} value={j.id}>{j.title} — {j.siteName}</option>
                 ))}
               </select>
             </div>
@@ -294,26 +268,26 @@ export function InjuryReportDetail() {
 
       {rootCause ? (
         <Card padding="lg">
-          <CardHeader>Root Cause Analysis</CardHeader>
+          <CardHeader>Root cause analysis</CardHeader>
           <CardDescription>Analyzed by {rootCause.analyzedBy} · {new Date(rootCause.analyzedAt).toLocaleString()}</CardDescription>
           <div className="mt-4 space-y-2 text-sm">
             <p><span className="font-medium text-neutral-700 dark:text-neutral-300">Immediate cause:</span> {rootCause.immediateCause}</p>
             {rootCause.contributingCauses.length > 0 && <p><span className="font-medium text-neutral-700 dark:text-neutral-300">Contributing:</span> {rootCause.contributingCauses.join('; ')}</p>}
             {rootCause.underlyingCause && <p><span className="font-medium text-neutral-700 dark:text-neutral-300">Underlying:</span> {rootCause.underlyingCause}</p>}
           </div>
-          <Link to={`/injury-reports/${id}/root-cause`} className="mt-3 inline-block"><Button size="sm" variant="ghost">Edit Analysis</Button></Link>
+          <Link to={`/injury-reports/${id}/root-cause`} className="mt-3 inline-block"><Button size="sm" variant="ghost">Edit analysis</Button></Link>
         </Card>
       ) : (
         <Card padding="lg">
-          <CardHeader>Root Cause Analysis</CardHeader>
+          <CardHeader>Root cause analysis</CardHeader>
           <CardDescription>Capture immediate, contributing, and underlying causes for prevention and regulatory reporting.</CardDescription>
-          <Link to={`/injury-reports/${id}/root-cause`} className="mt-3 inline-block"><Button size="sm">Add Root Cause Analysis</Button></Link>
+          <Link to={`/injury-reports/${id}/root-cause`} className="mt-3 inline-block"><Button size="sm">Add root cause analysis</Button></Link>
         </Card>
       )}
 
       {!isEditing && (
         <Card padding="lg">
-          <CardHeader>Update Status</CardHeader>
+          <CardHeader>Update status</CardHeader>
           <div className="mt-3 flex flex-wrap gap-2">
             {r.status !== 'under-review' && <Button size="sm" variant="secondary" onClick={() => updateReport(id!, { status: 'under-review' })}>Mark under review</Button>}
             {r.status !== 'closed' && <Button size="sm" variant="secondary" onClick={() => updateReport(id!, { status: 'closed' })}>Close report</Button>}

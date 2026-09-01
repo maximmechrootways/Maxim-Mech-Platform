@@ -28,7 +28,7 @@ export function GoogleSheetsConnect() {
   return (
     <div className="max-w-md mx-auto space-y-6 animate-fade-in">
       <div>
-        <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Google Sheets Integration</h1>
+        <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Google Sheets integration</h1>
         <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">HR only — connect your Google account to sync jobs from email.</p>
       </div>
       <Card padding="lg">

@@ -1,10 +1,7 @@
-/** PM2: use the same startup as `npm start` (migrations + node) so Prisma CLI comes from node_modules. */
 module.exports = {
     apps: [{
         name: 'maxim-backend',
-        script: 'npm',
-        args: 'start',
-        cwd: __dirname,
+        script: 'dist/index.js',
         instances: 1,
         autorestart: true,
         watch: false,

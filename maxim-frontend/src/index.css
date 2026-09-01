@@ -97,175 +97,18 @@
 }
 
 /* Print: hide nav/header so Save as PDF only captures content */
-.print-only {
-  display: none;
-}
-.print-logo-preload {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
 @media print {
   .no-print,
   header,
   aside,
-  nav,
-  .sidebar,
   .touch-target[aria-label="Toggle menu"],
   .touch-target[aria-label="Close menu"],
   .fixed {
     display: none !important;
   }
-  /* Mobile browsers can start the print snapshot before entrance animations finish.
-     Force fully-rendered content for print so we don't get blank pages. */
-  .animate-fade-in {
-    animation: none !important;
-    opacity: 1 !important;
-  }
   main {
     padding: 0 !important;
     max-width: 100% !important;
-    overflow: visible !important;
-    /* Flex-1 main + print often collapses to 0 height; only fixed headers then print. */
-    display: block !important;
-    flex: none !important;
-    height: auto !important;
-    min-height: auto !important;
-    max-height: none !important;
-  }
-  #root .min-h-screen.flex.flex-col > .flex.flex-1 {
-    display: block !important;
-    flex: none !important;
-    height: auto !important;
-    min-height: auto !important;
-    overflow: visible !important;
-  }
-  html, body {
-    overflow: visible !important;
-    height: auto !important;
   }
   body { background: #fff; }
-  #root,
-  #root > div {
-    overflow: visible !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-  }
-  .print-only {
-    display: block !important;
-  }
-  .print-only.print-flex-row {
-    display: flex !important;
-  }
-  .print-logo-banner {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    margin: 0 0 12px 0;
-    break-inside: avoid;
-  }
-  .print-logo-image {
-    width: 120px;
-    height: auto;
-    object-fit: contain;
-  }
-  .print-logo-banner svg {
-    width: 120px;
-    height: auto;
-    display: block;
-  }
-
-  /* Form review (Save as PDF): flat paper layout — no stacked glass cards or wide tables */
-  #form-review-pdf-print-root {
-    max-width: 100% !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    color-scheme: light !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    /* animate-fade-in starts at opacity:0; print can capture mid-animation and blank the page */
-    animation: none !important;
-    opacity: 1 !important;
-  }
-
-  #form-review-pdf-print-root .shadow-soft,
-  #form-review-pdf-print-root .shadow-soft-lg,
-  #form-review-pdf-print-root .shadow-md,
-  #form-review-pdf-print-root .shadow-lg,
-  #form-review-pdf-print-root .shadow-xl,
-  #form-review-pdf-print-root .shadow-2xl,
-  #form-review-pdf-print-root .shadow-dark-soft,
-  #form-review-pdf-print-root .shadow-dark-glow {
-    box-shadow: none !important;
-    text-shadow: none !important;
-  }
-  #form-review-pdf-print-root [class*='backdrop-blur'] {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-
-  #form-review-pdf-print-root .rounded-2xl,
-  #form-review-pdf-print-root .rounded-xl {
-    border-radius: 6px !important;
-  }
-
-  #form-review-pdf-print-root table {
-    min-width: 0 !important;
-    width: 100% !important;
-    table-layout: auto !important;
-    font-size: 9.5pt !important;
-  }
-
-  #form-review-pdf-print-root .overflow-x-auto {
-    overflow: visible !important;
-  }
-
-  #form-review-pdf-print-root thead,
-  #form-review-pdf-print-root thead th {
-    background: #f3f4f6 !important;
-    color: #111827 !important;
-  }
-
-  #form-review-pdf-print-root tbody td {
-    background: #ffffff !important;
-  }
-
-  .dark #form-review-pdf-print-root {
-    color: #1f2937 !important;
-  }
-
-  .dark #form-review-pdf-print-root h1,
-  .dark #form-review-pdf-print-root h2,
-  .dark #form-review-pdf-print-root h3,
-  .dark #form-review-pdf-print-root h4 {
-    color: #0f172a !important;
-  }
-
-  .dark #form-review-pdf-print-root div.rounded-2xl.border {
-    background: #ffffff !important;
-    border-color: #d1d5db !important;
-  }
-
-  .form-review-pdf-print-page {
-    display: block !important;
-    width: 100% !important;
-    position: relative !important;
-    break-after: page;
-    page-break-after: always;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-  .form-review-pdf-print-page:last-child,
-  .form-review-pdf-print-page-last {
-    break-after: auto;
-    page-break-after: auto;
-  }
-  .form-review-pdf-print-page img {
-    max-width: 100% !important;
-    height: auto !important;
-  }
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useUser } from '@/contexts/UserContext'
 import { useInjuryReports } from '@/contexts/InjuryReportsContext'
 import { Card } from '@/components/ui/Card'
@@ -8,32 +8,27 @@ import { Badge } from '@/components/ui/Badge'
 import { downloadCsv } from '@/utils/exportCsv'
 
 export function InjuryReports() {
-  const navigate = useNavigate()
   const { user } = useUser()
-  const { reports, loading, error } = useInjuryReports()
-  const [filter, setFilter] = useState<'open' | 'closed' | 'all'>('open')
+  const { reports } = useInjuryReports()
+  const [filter, setFilter] = useState<'all' | 'open' | 'closed'>('all')
 
-  const canAccessInjuryReports = user?.role === 'hr' || user?.role === 'owner' || user?.role === 'supervisor'
-  if (!canAccessInjuryReports) return null
-
-  if (loading && reports.length === 0) return <div className="animate-fade-in text-neutral-500 dark:text-neutral-400">Loading injury reports…</div>
-  if (error) return <div className="animate-fade-in text-red-600 dark:text-red-400">{error}</div>
+  if (user?.role !== 'hr' && user?.role !== 'owner') return null
 
   const filtered = reports.filter((r) => {
-    if (filter === 'open') return r.status !== 'closed' && r.status !== 'draft'
-    if (filter === 'closed') return r.status === 'closed'
-    return true
+    if (filter === 'all') return true
+    if (filter === 'open') return r.status !== 'closed'
+    return r.status === 'closed'
   })
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Injury Reports</h1>
+          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Injury reports</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1">Track and manage workplace injury reports in depth</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/injury-reports/analytics"><Button variant="secondary">Analytics & Metrics</Button></Link>
+          <Link to="/injury-reports/analytics"><Button variant="secondary">Analytics & metrics</Button></Link>
           <Button variant="secondary" onClick={() => {
             const rows = filtered.map((r) => ({
               id: r.id,
@@ -49,23 +44,16 @@ export function InjuryReports() {
             }))
             downloadCsv(rows, `injury-reports-${new Date().toISOString().slice(0, 10)}.csv`)
           }}>Export CSV</Button>
-          <Button leftIcon={<PlusIcon />} onClick={() => navigate('/injury-reports/new')}>New Report</Button>
+          <Button leftIcon={<PlusIcon />}>New report</Button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <label htmlFor="injury-status-filter" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Status:</label>
-        <select
-          id="injury-status-filter"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as 'open' | 'closed' | 'all')}
-          className="min-h-[40px] rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white px-3 py-2 text-sm min-w-[140px]"
-          aria-label="Filter by status"
-        >
-          <option value="open">Opens</option>
-          <option value="closed">Closed</option>
-          <option value="all">All (incl. drafts)</option>
-        </select>
+      <div className="flex gap-2">
+        {(['all', 'open', 'closed'] as const).map((f) => (
+          <Button key={f} variant={filter === f ? 'primary' : 'ghost'} size="sm" onClick={() => setFilter(f)}>
+            {f === 'all' ? 'All' : f === 'open' ? 'Open' : 'Closed'}
+          </Button>
+        ))}
       </div>
 
       <ul className="space-y-3">

@@ -1,18 +1,20 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteDocumentById = exports.getDocumentById = exports.listUserDocuments = exports.uploadDocumentRecord = void 0;
 const prisma_1 = require("../lib/prisma");
-const blobStorageService_1 = require("./blobStorageService");
+const fs_1 = __importDefault(require("fs"));
 const uploadDocumentRecord = async (userId, file, docType) => {
-    // Upload to Azure Blob Storage (deletes local file on success or failure)
-    const blobName = await (0, blobStorageService_1.uploadBlob)(file.path, 'documents');
+    // Generate db entry
     const doc = await prisma_1.prisma.document.create({
         data: {
             originalName: file.originalname,
             filename: file.filename,
             mimeType: file.mimetype,
             sizeBytes: file.size,
-            filePath: blobName,
+            filePath: file.path,
             docType: docType,
             uploadedById: userId,
             status: 'uploaded'
@@ -88,9 +90,9 @@ const deleteDocumentById = async (userId, docId) => {
         throw { status: 404, message: 'Document not found' };
     if (doc.uploadedById !== userId)
         throw { status: 403, message: 'Forbidden' };
-    // Delete blob from Azure Storage
-    if (doc.filePath) {
-        await (0, blobStorageService_1.deleteBlob)(doc.filePath);
+    // Remote file disk cleanup
+    if (fs_1.default.existsSync(doc.filePath)) {
+        fs_1.default.unlinkSync(doc.filePath);
     }
     await prisma_1.prisma.document.delete({ where: { id: docId } });
 };

@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
+import { MOCK_APP_USERS } from '@/data/mock'
 import { useUser } from '@/contexts/UserContext'
-import { fetchUsersAdmin } from '@/api/users'
 import { useDocuments } from '@/contexts/DocumentsContext'
 import type { DocumentRecord, DocumentVisibility, UserRole } from '@/types'
 
@@ -19,10 +19,6 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 export function AdminDocuments() {
   const { user } = useUser()
   const { documents: docs, setDocuments: setDocs } = useDocuments()
-  const [appUsers, setAppUsers] = useState<{ id: string; name: string }[]>([])
-  useEffect(() => {
-    fetchUsersAdmin().then((list) => setAppUsers(Array.isArray(list) ? list.map((u: { id: string; firstName?: string; lastName?: string; name?: string }) => ({ id: u.id, name: u.name ?? ([u.firstName, u.lastName].filter(Boolean).join(' ') || '') })) : [])).catch(() => setAppUsers([]))
-  }, [])
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
   const [newName, setNewName] = useState('')
@@ -71,7 +67,7 @@ export function AdminDocuments() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Document Visibility</h1>
+          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Document visibility</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">Upload docs and choose who can see them: everyone (e.g. safety handbook) or restricted (e.g. owner + HR + submitter only).</p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -82,7 +78,7 @@ export function AdminDocuments() {
 
       {showAdd && (
         <Card padding="lg">
-          <CardHeader>Upload Document</CardHeader>
+          <CardHeader>Upload document</CardHeader>
           <CardDescription>Set visibility so everyone can view (e.g. safety handbook) or only certain people (e.g. owner, HR, and the person who submitted).</CardDescription>
           <div className="mt-4 space-y-4 max-w-xl">
             <Input label="Document name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Safety Handbook 2025.pdf" />
@@ -96,7 +92,7 @@ export function AdminDocuments() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Who Can View</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Who can view</label>
               <select value={newVisibility} onChange={(e) => setNewVisibility(e.target.value as DocumentVisibility)} className="w-full min-h-[44px] px-4 rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white">
                 <option value="everyone">Everyone (e.g. safety handbook)</option>
                 <option value="restricted">Restricted (owner + HR + selected people only)</option>
@@ -118,10 +114,10 @@ export function AdminDocuments() {
                 <div>
                   <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Specific people who can view (e.g. submitter)</p>
                   <div className="flex flex-wrap gap-2">
-                    {appUsers.map((u) => (
+                    {MOCK_APP_USERS.map((u) => (
                       <label key={u.id} className="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" checked={newVisibleToUserIds.includes(u.id)} onChange={() => toggleUser(u.id)} className="rounded border-neutral-300 text-brand-600" />
-                        <span className="text-sm">{u.name}</span>
+                        <span className="text-sm">{u.name} ({u.role})</span>
                       </label>
                     ))}
                   </div>
@@ -137,7 +133,7 @@ export function AdminDocuments() {
       )}
 
       <Card padding="none">
-        <CardHeader className="px-4 py-3">All Documents</CardHeader>
+        <CardHeader className="px-4 py-3">All documents</CardHeader>
         <CardDescription className="px-4 pb-3">Visibility controls who sees each doc in the Document library.</CardDescription>
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {docs.map((d) => (

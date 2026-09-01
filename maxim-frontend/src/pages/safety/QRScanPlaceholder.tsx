@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/Button'
 export function QRScanPlaceholder() {
   return (
     <div className="space-y-6 animate-fade-in max-w-md mx-auto">
-      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & Safety</Link>
+      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & safety</Link>
       <Card padding="lg">
-        <h1 className="font-display font-bold text-xl text-neutral-900 dark:text-white">Scan Site QR Code</h1>
+        <h1 className="font-display font-bold text-xl text-neutral-900 dark:text-white">Scan site QR code</h1>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-2">Point your device camera at the site QR code to load the pre-start checklist or site-specific info.</p>
         <div className="mt-6 aspect-square max-w-[200px] mx-auto rounded-xl bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm">
           Camera placeholder

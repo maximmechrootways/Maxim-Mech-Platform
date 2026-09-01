@@ -1,85 +1,77 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { MOCK_HR_TODOS } from '@/data/mock'
 import type { HRTodoItem } from '@/types'
-import { useAuth } from '@/contexts/AuthContext'
-import * as hrTodoApi from '@/api/hrTodo'
+
+const STORAGE_KEY = 'maxim-hr-todos'
 
 interface HRTodosContextValue {
-  loadData: () => void
   todos: HRTodoItem[]
-  loading: boolean
-  refetch: () => Promise<void>
-  addTodo: (item: Omit<HRTodoItem, 'id' | 'createdAt'>) => Promise<HRTodoItem | void>
-  updateTodo: (id: string, patch: Partial<Pick<HRTodoItem, 'title' | 'dueDate' | 'dueTime' | 'recurrence' | 'completed' | 'completedAt' | 'linkTo'>>) => Promise<void>
-  removeTodo: (id: string) => Promise<void>
-  toggleComplete: (id: string) => Promise<void>
+  addTodo: (item: Omit<HRTodoItem, 'id' | 'createdAt'>) => void
+  updateTodo: (id: string, patch: Partial<Pick<HRTodoItem, 'title' | 'dueDate' | 'dueTime' | 'recurrence' | 'completed' | 'completedAt' | 'linkTo'>>) => void
+  removeTodo: (id: string) => void
+  toggleComplete: (id: string) => void
 }
 
 const HRTodosContext = createContext<HRTodosContextValue | null>(null)
 
+function loadTodos(): HRTodoItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return MOCK_HR_TODOS
+    const parsed = JSON.parse(raw) as HRTodoItem[]
+    return Array.isArray(parsed) ? parsed : MOCK_HR_TODOS
+  } catch {
+    return MOCK_HR_TODOS
+  }
+}
+
+function saveTodos(items: HRTodoItem[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+  } catch {
+    // ignore
+  }
+}
+
 export function HRTodosProvider({ children }: { children: React.ReactNode }) {
-  const { session } = useAuth()
-  const [hasFetched, setHasFetched] = useState(false)
-  const loadData = useCallback(() => setHasFetched(true), [])
-  const [todos, setTodos] = useState<HRTodoItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [todos, setTodos] = useState<HRTodoItem[]>(loadTodos)
 
-  const refetch = useCallback(async () => {
-    try {
-      setLoading(true)
-      const data = await hrTodoApi.fetchHRTodo()
-      setTodos(Array.isArray(data) ? data : [])
-    } catch {
-      setTodos([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Only fetch when authenticated so Authorization header is set (avoids 401)
   useEffect(() => {
-    if (!session || !hasFetched) return
-    refetch()
-  }, [session?.id, hasFetched, refetch])
+    saveTodos(todos)
+  }, [todos])
 
-  const addTodo = useCallback(async (item: Omit<HRTodoItem, 'id' | 'createdAt'>): Promise<HRTodoItem | void> => {
-    const created = await hrTodoApi.createHRTodo({
-      title: item.title,
-      recurrence: item.recurrence ?? 'daily',
-      dueDate: item.dueDate,
-      dueTime: item.dueTime,
-      linkTo: item.linkTo,
-    }) as HRTodoItem
-    const full: HRTodoItem = {
-      ...created,
-      createdAt: created.createdAt ?? new Date().toISOString(),
+  const addTodo = useCallback((item: Omit<HRTodoItem, 'id' | 'createdAt'>) => {
+    const id = 'ht-' + Date.now()
+    const newItem: HRTodoItem = {
+      ...item,
+      id,
+      createdAt: new Date().toISOString(),
     }
-    setTodos((prev) => [full, ...prev])
-    return full
+    setTodos((prev) => [newItem, ...prev])
   }, [])
 
-  const updateTodo = useCallback(async (id: string, patch: Partial<Pick<HRTodoItem, 'title' | 'dueDate' | 'dueTime' | 'recurrence' | 'completed' | 'completedAt' | 'linkTo'>>) => {
-    const updated = await hrTodoApi.updateHRTodo(id, patch)
-    setTodos((prev) => prev.map((t) => (t.id === id ? { ...updated, createdAt: t.createdAt } : t)))
+  const updateTodo = useCallback((id: string, patch: Partial<Pick<HRTodoItem, 'title' | 'dueDate' | 'recurrence' | 'completed' | 'completedAt' | 'linkTo'>>) => {
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...patch } : t))
+    )
   }, [])
 
-  const removeTodo = useCallback(async (id: string) => {
-    await hrTodoApi.deleteHRTodo(id)
+  const removeTodo = useCallback((id: string) => {
     setTodos((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  const toggleComplete = useCallback(async (id: string) => {
-    const t = todos.find((x) => x.id === id)
-    if (!t) return
-    const completed = !t.completed
-    const updated = await hrTodoApi.updateHRTodo(id, { completed })
-    setTodos((prev) => prev.map((x) => (x.id === id ? { ...updated, createdAt: x.createdAt } : x)))
-  }, [todos])
+  const toggleComplete = useCallback((id: string) => {
+    setTodos((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t
+        const completed = !t.completed
+        return { ...t, completed, completedAt: completed ? new Date().toISOString() : undefined }
+      })
+    )
+  }, [])
 
   const value: HRTodosContextValue = {
-    loadData,
     todos,
-    loading,
-    refetch,
     addTodo,
     updateTodo,
     removeTodo,
@@ -91,18 +83,13 @@ export function HRTodosProvider({ children }: { children: React.ReactNode }) {
 
 export function useHRTodos() {
   const ctx = useContext(HRTodosContext)
-
   if (!ctx)
     return {
-      loadData: () => { },
-      todos: [] as HRTodoItem[],
-      loading: false,
-      refetch: async () => { },
-      addTodo: async () => undefined,
-      updateTodo: async () => { },
-      removeTodo: async () => { },
-      toggleComplete: async () => { },
+      todos: MOCK_HR_TODOS,
+      addTodo: () => {},
+      updateTodo: () => {},
+      removeTodo: () => {},
+      toggleComplete: () => {},
     }
-
   return ctx
 }

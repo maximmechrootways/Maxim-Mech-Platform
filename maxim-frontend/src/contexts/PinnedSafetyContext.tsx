@@ -8,7 +8,6 @@ export interface PinnedItem {
 }
 
 interface PinnedSafetyContextValue {
-  loadData: () => void
   pinned: PinnedItem[]
   isPinned: (to: string) => boolean
   togglePinned: (to: string, label: string) => void
@@ -36,8 +35,6 @@ function savePinned(items: PinnedItem[]) {
 }
 
 export function PinnedSafetyProvider({ children }: { children: React.ReactNode }) {
-  const [hasFetched, setHasFetched] = useState(false)
-  const loadData = useCallback(() => setHasFetched(true), [])
   const [pinned, setPinned] = useState<PinnedItem[]>(loadPinned)
 
   useEffect(() => {
@@ -58,10 +55,7 @@ export function PinnedSafetyProvider({ children }: { children: React.ReactNode }
   }, [])
 
   return (
-    <PinnedSafetyContext.Provider value={{
-      loadData,
-      pinned, isPinned, togglePinned
-    }}>
+    <PinnedSafetyContext.Provider value={{ pinned, isPinned, togglePinned }}>
       {children}
     </PinnedSafetyContext.Provider>
   )
@@ -69,21 +63,11 @@ export function PinnedSafetyProvider({ children }: { children: React.ReactNode }
 
 export function usePinnedSafety() {
   const ctx = useContext(PinnedSafetyContext)
-
-  useEffect(() => {
-    if (ctx && ctx.loadData) {
-      ctx.loadData()
-    }
-  }, [ctx])
-
   if (!ctx)
     return {
-      loadData: () => { },
-
       pinned: [] as PinnedItem[],
       isPinned: (_to: string) => false,
-      togglePinned: (_to: string, _label: string) => { },
+      togglePinned: (_to: string, _label: string) => {},
     }
-
   return ctx
 }

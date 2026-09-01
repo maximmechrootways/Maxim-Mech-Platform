@@ -31,15 +31,6 @@ export function IconDocument({ className = 'w-5 h-5' }: { className?: string }) 
   )
 }
 
-/** Open book — Health and Safety Manual and similar long-form reference. */
-export function IconBookOpen({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-    </svg>
-  )
-}
-
 export function IconForms({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -105,16 +96,6 @@ export function IconUserGroup({ className = 'w-5 h-5' }: { className?: string })
   )
 }
 
-/** Construction-style subcontractor icon (worker + org chart card). */
-export function IconSubcontractor({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 13h10v7H4zM9 13v-2M6 20h6M7 16h4m8-3h-3a2 2 0 00-2 2v5h8v-5a2 2 0 00-2-2z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.5 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5zM16 18h3m-1.5-3v3M5.5 11A3.5 3.5 0 019 7.5h2.5" />
-    </svg>
-  )
-}
-
 export function IconHeart({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -155,16 +136,6 @@ export function IconCertificate({ className = 'w-5 h-5' }: { className?: string 
   )
 }
 
-/** Graduation cap / academic – used for Certificates (training & certifications). */
-export function IconAcademicCap({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-    </svg>
-  )
-}
-
 export function IconTable({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -177,36 +148,6 @@ export function IconCalendar({ className = 'w-5 h-5' }: { className?: string }) 
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  )
-}
-
-/** Wall clock — Employee Time tracking. */
-export function IconClock({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  )
-}
-
-/** Heavy equipment / excavator silhouette — Equipment Log. */
-export function IconEquipment({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16h4l1-4h6l2 4h3M8 16v2m8-2v2M6 20h12M9 12l2-6h4l2 6" />
-      <circle cx="8" cy="18" r="2" />
-      <circle cx="16" cy="18" r="2" />
-    </svg>
-  )
-}
-
-/** Pennant / flag — Form Red Flags & alerts. */
-export function IconFlag({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 22V4" />
     </svg>
   )
 }

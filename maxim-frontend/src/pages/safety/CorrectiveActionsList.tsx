@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useCorrectiveActions } from '@/contexts/CorrectiveActionsContext'
 import { useUser } from '@/contexts/UserContext'
-import { fetchUsersForAssignment } from '@/api/jobs'
+import { MOCK_APP_USERS } from '@/data/mock'
 import { downloadCsv } from '@/utils/exportCsv'
 import type { CorrectiveAction } from '@/types'
 
@@ -19,14 +19,9 @@ const ACTION_TYPES: CorrectiveAction['actionType'][] = ['corrective', 'preventiv
 export function CorrectiveActionsList() {
   const { user } = useUser()
   const { actions, addAction, updateAction, removeAction } = useCorrectiveActions()
-  const [appUsers, setAppUsers] = useState<{ id: string; name: string }[]>([])
-  useEffect(() => {
-    fetchUsersForAssignment().then(setAppUsers).catch(() => setAppUsers([]))
-  }, [])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const [actionType, setActionType] = useState<CorrectiveAction['actionType']>('corrective')
   const [sourceType, setSourceType] = useState<CorrectiveAction['sourceType']>('incident')
   const [sourceId, setSourceId] = useState('')
@@ -71,50 +66,45 @@ export function CorrectiveActionsList() {
     setEditingId(null)
   }
 
-  const save = async () => {
-    setSaving(true)
-    try {
-      if (editingId) {
-        await updateAction(editingId, {
-          actionType,
-          sourceType,
-          sourceId: sourceId.trim(),
-          title: title.trim(),
-          description: description.trim(),
-          assignedTo: assignedTo.trim(),
-          dueDate: dueDate.trim(),
-          status,
-          ...(status === 'completed' ? { completedAt: new Date().toISOString() } : {}),
-        })
-      } else {
-        await addAction({
-          actionType,
-          sourceType,
-          sourceId: sourceId.trim() || `ref-${Date.now()}`,
-          title: title.trim(),
-          description: description.trim(),
-          assignedTo: assignedTo.trim(),
-          dueDate: dueDate.trim(),
-          status,
-        })
-      }
-      closeForm()
-    } finally {
-      setSaving(false)
+  const save = () => {
+    if (editingId) {
+      updateAction(editingId, {
+        actionType,
+        sourceType,
+        sourceId: sourceId.trim(),
+        title: title.trim(),
+        description: description.trim(),
+        assignedTo: assignedTo.trim(),
+        dueDate: dueDate.trim(),
+        status,
+        ...(status === 'completed' ? { completedAt: new Date().toISOString() } : {}),
+      })
+    } else {
+      addAction({
+        actionType,
+        sourceType,
+        sourceId: sourceId.trim() || `ref-${Date.now()}`,
+        title: title.trim(),
+        description: description.trim(),
+        assignedTo: assignedTo.trim(),
+        dueDate: dueDate.trim(),
+        status,
+      })
     }
+    closeForm()
   }
 
-  const confirmDelete = async (id: string) => {
-    await removeAction(id)
+  const confirmDelete = (id: string) => {
+    removeAction(id)
     setDeleteId(null)
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & Safety</Link>
+      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & safety</Link>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Corrective & Preventive Actions (CAPA)</h1>
+          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Corrective & preventive actions (CAPA)</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
             {isHr ? 'Corrective (after event) and preventive (to prevent recurrence). HR can add, edit, and remove.' : 'Track actions from incidents and hazards.'}
           </p>
@@ -140,7 +130,7 @@ export function CorrectiveActionsList() {
             downloadCsv(rows, `capa-${new Date().toISOString().slice(0, 10)}.csv`)
           }}>Export CSV</Button>
           {isHr && (
-            <Button size="sm" onClick={openCreate}>Add Action</Button>
+            <Button size="sm" onClick={openCreate}>Add action</Button>
           )}
         </div>
       </div>
@@ -151,7 +141,7 @@ export function CorrectiveActionsList() {
           <CardDescription>Corrective = after an event; preventive = to prevent recurrence. Link to source and assign.</CardDescription>
           <div className="mt-4 space-y-4 max-w-xl">
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Action Type</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Action type</label>
               <select value={actionType} onChange={(e) => setActionType(e.target.value as CorrectiveAction['actionType'])} className="w-full px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white">
                 {ACTION_TYPES.map((t) => (
                   <option key={t} value={t}>{t}</option>
@@ -159,7 +149,7 @@ export function CorrectiveActionsList() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Source Type</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Source type</label>
               <select
                 value={sourceType}
                 onChange={(e) => setSourceType(e.target.value as CorrectiveAction['sourceType'])}
@@ -174,14 +164,14 @@ export function CorrectiveActionsList() {
             <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Review glove policy" required />
             <Textarea label="Description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What needs to be done" rows={3} required />
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Assigned To</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">Assigned to</label>
               <select
                 value={assignedTo}
                 onChange={(e) => setAssignedTo(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
               >
                 <option value="">— Select —</option>
-                {appUsers.map((u) => (
+                {MOCK_APP_USERS.map((u) => (
                   <option key={u.id} value={u.name}>{u.name}</option>
                 ))}
               </select>
@@ -202,7 +192,7 @@ export function CorrectiveActionsList() {
               </div>
             )}
             <div className="flex gap-2">
-              <Button onClick={save} disabled={!title.trim() || !description.trim() || !dueDate || saving}>{editingId ? 'Save changes' : 'Add action'}</Button>
+              <Button onClick={save} disabled={!title.trim() || !description.trim() || !dueDate}>{editingId ? 'Save changes' : 'Add action'}</Button>
               <Button variant="ghost" onClick={closeForm}>Cancel</Button>
             </div>
           </div>
@@ -214,7 +204,7 @@ export function CorrectiveActionsList() {
           <EmptyState
             title="No corrective actions"
             description={isHr ? 'Add an action linked to an injury, incident, near-miss, or hazard.' : 'No actions yet.'}
-            action={isHr ? <Button size="sm" onClick={openCreate}>Add Corrective Action</Button> : undefined}
+            action={isHr ? <Button size="sm" onClick={openCreate}>Add corrective action</Button> : undefined}
           />
         </Card>
       ) : (
@@ -246,7 +236,7 @@ export function CorrectiveActionsList() {
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" onClick={() => setDeleteId(null)}>
           <Card padding="lg" className="max-w-md w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display font-bold text-xl text-neutral-900 dark:text-white">Delete This Corrective Action?</h2>
+            <h2 className="font-display font-bold text-xl text-neutral-900 dark:text-white">Delete this corrective action?</h2>
             <p className="mt-2 text-neutral-600 dark:text-neutral-400">This cannot be undone.</p>
             <div className="mt-6 flex gap-3 justify-end">
               <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancel</Button>

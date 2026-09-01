@@ -3,12 +3,10 @@ import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { api } from '@/api'
+import { MOCK_APP_USERS } from '@/data/mock'
 import { useScannedPdfs } from '@/contexts/ScannedPdfsContext'
 import { useSignableTemplates } from '@/contexts/SignableTemplatesContext'
-import { createSignableTemplate, updateSignableTemplate, fetchScannedPdfById, getPdfTemplate, updatePdfTemplate } from '@/api/library'
 import type { PlacedFormField, SignableFormTemplate, UserRole } from '@/types'
-import PdfPageRenderer from '@/components/pdf/PdfPageRenderer'
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'owner', label: 'Owners' },
@@ -21,7 +19,6 @@ const FIELD_TYPES: { value: PlacedFormField['type']; label: string }[] = [
   { value: 'text', label: 'Text' },
   { value: 'date', label: 'Date' },
   { value: 'signature', label: 'Signature (by text)' },
-  { value: 'checkbox', label: 'Checkbox' },
 ]
 
 const DEFAULT_FIELD_WIDTH = 28
@@ -34,99 +31,24 @@ const MAX_HEIGHT = 40
 function clampWidth(w: number) { return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, w)) }
 function clampHeight(h: number) { return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, h)) }
 
-const BACKEND_FIELD_TYPE_TO_EDITOR: Record<string, PlacedFormField['type']> = {
-  TEXT: 'text',
-  DATE: 'date',
-  SIGNATURE: 'signature',
-  NUMBER: 'text',
-  CHECKBOX: 'checkbox',
-}
-
 export function FormFromPdfEditor() {
   const { pdfId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { getPdf, addPdf } = useScannedPdfs()
-  const { templates, addTemplate, updateTemplateBySourcePdf, refetch: refetchTemplates } = useSignableTemplates()
+  const { getPdf } = useScannedPdfs()
+  const { templates, addTemplate, updateTemplateBySourcePdf } = useSignableTemplates()
   const pdf = pdfId ? getPdf(pdfId) : undefined
   const existing = pdfId ? templates.find((t) => t.sourcePdfId === pdfId) : undefined
-
-  const [pdfTemplate, setPdfTemplate] = useState<Awaited<ReturnType<typeof getPdfTemplate>>>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState({ width: 0, height: 0 })
-
-  useEffect(() => {
-    if (!pdfId) return
-    getPdfTemplate(pdfId).then((t) => setPdfTemplate(t))
-  }, [pdfId])
-
-  useEffect(() => {
-    if (!pdfId || pdf) return
-    fetchScannedPdfById(pdfId)
-      .then((p) => {
-        if (p) addPdf({ id: p.id, name: p.name, uploadedAt: p.uploadedAt, uploadedBy: p.uploadedBy ?? '' })
-      })
-      .catch(() => { })
-  }, [pdfId, pdf, addPdf])
   const pageRef = useRef<HTMLDivElement>(null)
   const isLibraryRoute = location.pathname.includes('/library/')
   const backHref = isLibraryRoute ? '/library?view=templates' : '/admin/scanned-forms'
 
-  const initialName = pdfTemplate?.name ?? existing?.name ?? pdf?.name?.replace('.pdf', '') ?? ''
-  const initialDescription = pdfTemplate?.description ?? existing?.description ?? ''
-  const initialAssignedRoles = (pdfTemplate?.assignedRoles?.length ? pdfTemplate.assignedRoles as UserRole[] : existing?.assignedToRoles) ?? ['supervisor']
-  const initialFields: PlacedFormField[] = pdfTemplate?.fields?.length
-    ? pdfTemplate.fields.map((f) => ({
-      id: f.id,
-      type: BACKEND_FIELD_TYPE_TO_EDITOR[f.type] ?? 'text',
-      label: f.label ?? '',
-      required: f.required ?? false,
-      page: f.page ?? 1,
-      x: (f.x ?? 0) * 100,
-      y: (f.y ?? 0) * 100,
-      width: (f.width ?? 0.1) * 100,
-      height: (f.height ?? 0.04) * 100,
-    }))
-    : existing?.placedFields ?? []
-
-  const [name, setName] = useState(initialName)
-  const [description, setDescription] = useState(initialDescription)
+  const [name, setName] = useState(existing?.name ?? pdf?.name.replace('.pdf', '') ?? '')
+  const [description, setDescription] = useState(existing?.description ?? '')
   const [schedule, setSchedule] = useState<SignableFormTemplate['schedule']>(existing?.schedule ?? 'daily')
-  const [assignedToRoles, setAssignedToRoles] = useState<UserRole[]>(initialAssignedRoles)
+  const [assignedToRoles, setAssignedToRoles] = useState<UserRole[]>(existing?.assignedToRoles ?? ['supervisor'])
   const [assignedToUserIds, setAssignedToUserIds] = useState<string[]>(existing?.assignedToUserIds ?? [])
-  const [fields, setFields] = useState<PlacedFormField[]>(initialFields)
-  const [allUsers, setAllUsers] = useState<{ id: string; name: string; role: string }[]>([])
-
-  useEffect(() => {
-    api.get('/users').then((res) => {
-      if (Array.isArray(res.data)) setAllUsers(res.data)
-    }).catch(() => setAllUsers([]))
-  }, [])
-
-  useEffect(() => {
-    if (!pdfTemplate) return
-    setName(pdfTemplate.name ?? '')
-    setDescription(pdfTemplate.description ?? '')
-    setAssignedToRoles((pdfTemplate.assignedRoles?.length ? pdfTemplate.assignedRoles as UserRole[] : []) || ['supervisor'])
-    if ((pdfTemplate as any).assignedUserIds?.length) {
-      setAssignedToUserIds((pdfTemplate as any).assignedUserIds)
-    }
-    if (pdfTemplate.fields?.length) {
-      setFields(
-        pdfTemplate.fields.map((f) => ({
-          id: f.id,
-          type: BACKEND_FIELD_TYPE_TO_EDITOR[f.type] ?? 'text',
-          label: f.label ?? '',
-          required: f.required ?? false,
-          page: f.page ?? 1,
-          x: (f.x ?? 0) * 100,
-          y: (f.y ?? 0) * 100,
-          width: (f.width ?? 0.1) * 100,
-          height: (f.height ?? 0.04) * 100,
-        }))
-      )
-    }
-  }, [pdfTemplate?.id])
+  const [fields, setFields] = useState<PlacedFormField[]>(existing?.placedFields ?? [])
   const [placeMode, setPlaceMode] = useState<PlacedFormField['type'] | null>(null)
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null)
   const [dragState, setDragState] = useState<
@@ -134,7 +56,6 @@ export function FormFromPdfEditor() {
     | { type: 'move'; fieldId: string; startPctX: number; startPctY: number; startFieldX: number; startFieldY: number }
     | { type: 'resize'; fieldId: string; startPctX: number; startPctY: number; startFieldX: number; startFieldY: number; startW: number; startH: number }
   >(null)
-  const [saving, setSaving] = useState(false)
 
   const toggleRole = (role: UserRole) => {
     setAssignedToRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]))
@@ -147,21 +68,18 @@ export function FormFromPdfEditor() {
   const addFieldAtPosition = (xPct: number, yPct: number) => {
     if (!placeMode) return
     const id = `f-${Date.now()}`
-    const isCheckbox = placeMode === 'checkbox'
-    const fieldWidth = isCheckbox ? 2.5 : DEFAULT_FIELD_WIDTH
-    const fieldHeight = isCheckbox ? 2.5 : DEFAULT_FIELD_HEIGHT
     setFields((prev) => [
       ...prev,
       {
         id,
         type: placeMode,
-        label: placeMode === 'signature' ? 'Signature' : placeMode === 'date' ? 'Date' : isCheckbox ? 'Check' : 'Text',
+        label: placeMode === 'signature' ? 'Signature' : placeMode === 'date' ? 'Date' : 'Text',
         required: false,
         page: 1,
-        x: Math.max(0, Math.min(100 - fieldWidth, xPct)),
-        y: Math.max(0, Math.min(100 - fieldHeight, yPct)),
-        width: fieldWidth,
-        height: fieldHeight,
+        x: Math.max(0, Math.min(100 - DEFAULT_FIELD_WIDTH, xPct)),
+        y: Math.max(0, Math.min(100 - DEFAULT_FIELD_HEIGHT, yPct)),
+        width: DEFAULT_FIELD_WIDTH,
+        height: DEFAULT_FIELD_HEIGHT,
       },
     ])
     setSelectedFieldId(id)
@@ -276,74 +194,39 @@ export function FormFromPdfEditor() {
 
   const hasSignature = fields.some((f) => f.type === 'signature')
 
-  const save = async () => {
+  const save = () => {
     if (!name.trim() || !pdfId) return
+    if (!hasSignature) {
+      alert('Add at least one Signature field so the submitter can sign by text.')
+      return
+    }
     if (assignedToRoles.length === 0 && assignedToUserIds.length === 0) {
       alert('Assign to at least one role or specific person.')
       return
     }
-    if (pdfTemplate && !fields.some((f) => f.type === 'signature')) {
-      alert('Add at least one Signature field so the submitter can sign.')
-      return
+    const payload: SignableFormTemplate = {
+      id: existing?.id ?? `sf-${pdfId}`,
+      name: name.trim(),
+      description: description.trim(),
+      assignedToRoles,
+      assignedToUserIds: assignedToUserIds.length ? assignedToUserIds : undefined,
+      schedule,
+      createdAt: existing?.createdAt ?? new Date().toISOString().slice(0, 10),
+      createdBy: existing?.createdBy ?? 'HR',
+      active: true,
+      sourcePdfId: pdfId,
+      placedFields: fields.length ? fields : undefined,
     }
-    if (!pdfTemplate && !hasSignature) {
-      alert('Add at least one Signature field so the submitter can sign by text.')
-      return
+    if (existing) {
+      updateTemplateBySourcePdf(pdfId!, payload)
+    } else {
+      addTemplate(payload)
     }
-    setSaving(true)
-    try {
-      if (pdfTemplate) {
-        const typeMap: Record<string, string> = { signature: 'SIGNATURE', date: 'DATE', text: 'TEXT', checkbox: 'CHECKBOX' }
-        const payload = {
-          name: name.trim(),
-          description: description.trim() || undefined,
-          assignedRoles: assignedToRoles,
-          assignedUserIds: assignedToUserIds,
-          fields: fields.map((f) => ({
-            id: f.id,
-            type: (typeMap[f.type] ?? 'TEXT') as string,
-            label: f.label,
-            page: f.page ?? 1,
-            x: (f.x ?? 0) / 100,
-            y: (f.y ?? 0) / 100,
-            width: (f.width ?? 28) / 100,
-            height: (f.height ?? 6) / 100,
-            required: f.required ?? false,
-          })),
-        }
-        await updatePdfTemplate(pdfTemplate.id, payload)
-        const redirectTo = isLibraryRoute ? '/library?view=templates' : '/library?view=templates'
-        navigate(redirectTo, { state: { message: 'Form saved.' } })
-        return
-      }
-      const payload = {
-        name: name.trim(),
-        description: description.trim(),
-        assignedToRoles,
-        assignedToUserIds: assignedToUserIds.length ? assignedToUserIds : undefined,
-        schedule,
-        sourcePdfId: pdfId,
-        placedFields: fields.length ? fields : undefined,
-      }
-      if (existing) {
-        await updateSignableTemplate(existing.id, payload)
-        updateTemplateBySourcePdf(pdfId!, { ...existing, ...payload })
-      } else {
-        const created = await createSignableTemplate(payload)
-        addTemplate({ ...created, createdAt: created.createdAt, createdBy: created.createdBy })
-      }
-      await refetchTemplates()
-      const redirectTo = isLibraryRoute ? '/library?view=templates' : '/admin/scanned-forms'
-      navigate(redirectTo, { state: { message: 'Form saved. It is available as a template and can be assigned.' } })
-    } catch (err: any) {
-      alert(err?.response?.data?.message ?? err?.message ?? 'Save failed.')
-    } finally {
-      setSaving(false)
-    }
+    const redirectTo = isLibraryRoute ? '/library?view=templates' : '/admin/scanned-forms'
+    navigate(redirectTo, { state: { message: 'Form saved. It is available as a template and can be assigned.' } })
   }
 
-  const displayName = pdfTemplate?.name ?? pdf?.name
-  if (!pdf && !pdfTemplate) {
+  if (!pdf) {
     return (
       <div className="space-y-4 animate-fade-in">
         <p className="text-neutral-500 dark:text-neutral-400">PDF not found.</p>
@@ -359,8 +242,8 @@ export function FormFromPdfEditor() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </Link>
         <div>
-          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Add Fields on PDF</h1>
-          <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">Based on: {displayName} — click on the document to place fields like DocuSign.</p>
+          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Add fields on PDF</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">Based on: {pdf.name} — click on the document to place fields like DocuSign.</p>
         </div>
       </div>
 
@@ -385,49 +268,30 @@ export function FormFromPdfEditor() {
           <div
             ref={pageRef}
             className="relative mt-4 mx-auto bg-white shadow-lg border border-neutral-300 dark:border-neutral-500 rounded-sm overflow-hidden text-neutral-900"
-            style={{ maxWidth: '100%', cursor: placeMode ? 'crosshair' : 'default', ...(!pdfTemplate?.filePath && { aspectRatio: '210/297' }) }}
+            style={{ aspectRatio: '210/297', maxWidth: '100%', cursor: placeMode ? 'crosshair' : 'default' }}
             onClick={handlePageClick}
             role={placeMode ? 'button' : undefined}
             aria-label={placeMode ? `Click to place ${placeMode} field` : 'PDF page'}
           >
-            {pdfTemplate?.filePath ? (
-              <>
-                <PdfPageRenderer
-                  filePath={pdfTemplate.filePath}
-                  pageNumber={currentPage}
-                  onPageSize={(w, h) => setPageSize({ width: w, height: h })}
-                  className="w-full"
-                />
-                {(pdfTemplate.pageCount ?? 1) > 1 && (
-                  <div className="no-print flex items-center justify-center gap-2 mt-2">
-                    <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</Button>
-                    <span className="text-sm text-neutral-600 dark:text-neutral-400">Page {currentPage} of {pdfTemplate.pageCount ?? 1}</span>
-                    <Button variant="outline" size="sm" disabled={currentPage >= (pdfTemplate.pageCount ?? 1)} onClick={() => setCurrentPage((p) => p + 1)}>Next</Button>
-                  </div>
-                )}
-              </>
-            ) : (
-              /* Fallback placeholder when no PDF template filePath (e.g. old ScannedPdf flow) */
-              <div className="absolute inset-0 p-6 text-neutral-600 text-sm pointer-events-none select-none" style={{ aspectRatio: '210/297' }}>
-                <div className="border-b border-neutral-300 pb-2 mb-4 font-medium text-neutral-700">{displayName}</div>
-                <div className="space-y-2 opacity-80">
-                  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
-                  <p>Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
-                  <p>Ut enim ad minim veniam, quis nostrud exercitation.</p>
-                </div>
+            {/* Mock PDF content — keep paper look and readable text in both themes */}
+            <div className="absolute inset-0 p-6 text-neutral-600 text-sm pointer-events-none select-none">
+              <div className="border-b border-neutral-300 pb-2 mb-4 font-medium text-neutral-700">{pdf.name}</div>
+              <div className="space-y-2 opacity-80">
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+                <p>Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+                <p>Ut enim ad minim veniam, quis nostrud exercitation.</p>
               </div>
-            )}
+            </div>
             {/* Placed fields as overlays — drag to move, drag corner to resize */}
             {fields.map((f) => (
               <div
                 key={f.id}
                 data-field-overlay
-                className={`absolute border-2 min-h-[20px] rounded flex items-center justify-center text-xs font-medium overflow-visible select-none ${selectedFieldId === f.id
-                  ? 'border-brand-500 bg-brand-100 text-brand-900 z-10'
-                  : f.type === 'checkbox'
-                    ? 'border-yellow-400 bg-yellow-100 text-yellow-800 z-[1]'
+                className={`absolute border-2 min-h-[20px] rounded flex items-center justify-center text-xs font-medium overflow-visible select-none ${
+                  selectedFieldId === f.id
+                    ? 'border-brand-500 bg-brand-100 text-brand-900 z-10'
                     : 'border-neutral-500 bg-neutral-100 text-neutral-800 z-[1]'
-                  } ${dragState?.fieldId === f.id ? (dragState.type === 'resize' ? 'cursor-nwse-resize' : 'cursor-grabbing') : 'cursor-grab'}`}
+                } ${dragState?.fieldId === f.id ? (dragState.type === 'resize' ? 'cursor-nwse-resize' : 'cursor-grabbing') : 'cursor-grab'}`}
                 style={{
                   left: `${f.x ?? 0}%`,
                   top: `${f.y ?? 0}%`,
@@ -463,7 +327,7 @@ export function FormFromPdfEditor() {
         {/* Field list + form settings */}
         <div className="space-y-4">
           <Card padding="lg">
-            <CardHeader>Fields on Document</CardHeader>
+            <CardHeader>Fields on document</CardHeader>
             <CardDescription>Edit label and type. Submissions are geo-tagged.</CardDescription>
             <ul className="mt-3 space-y-2 max-h-[240px] overflow-y-auto">
               {fields.map((f) => (
@@ -536,7 +400,7 @@ export function FormFromPdfEditor() {
           </Card>
 
           <Card padding="lg">
-            <CardHeader>Form Details</CardHeader>
+            <CardHeader>Form details</CardHeader>
             <Input label="Form name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Daily Safety Checklist" className="text-sm" />
             <Input label="Description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" className="text-sm mt-2" />
             <div className="mt-3">
@@ -562,11 +426,10 @@ export function FormFromPdfEditor() {
             <div className="mt-2">
               <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Or specific people</p>
               <div className="flex flex-wrap gap-1.5">
-                {allUsers.length === 0 && <span className="text-xs text-neutral-400">Loading users…</span>}
-                {allUsers.map((u) => (
+                {MOCK_APP_USERS.map((u) => (
                   <label key={u.id} className="flex items-center gap-1 cursor-pointer text-xs">
                     <input type="checkbox" checked={assignedToUserIds.includes(u.id)} onChange={() => toggleUser(u.id)} className="rounded border-neutral-300 text-brand-600" />
-                    {u.name || u.id}
+                    {u.name}
                   </label>
                 ))}
               </div>
@@ -576,7 +439,7 @@ export function FormFromPdfEditor() {
       </div>
 
       <div className="flex gap-2">
-        <Button onClick={save} disabled={!name.trim() || !hasSignature || saving}>{saving ? 'Saving…' : 'Save form'}</Button>
+        <Button onClick={save} disabled={!name.trim() || !hasSignature}>Save form</Button>
         <Link to={backHref}><Button variant="ghost">Cancel</Button></Link>
       </div>
     </div>

@@ -1,12 +1,7 @@
+@"
+/*
 !/maxim-backend/
 !/maxim-frontend/
 !/.github/
 !/.gitignore
-!/gx10-local-rag/
-gx10-local-rag/.env
-gx10-local-rag/desktop/node_modules/
-gx10-local-rag/desktop/dist/
-gx10-local-rag/desktop/dist-installer/
-__pycache__/
-*.pyc
-node_modules
+"@ | Out-File -FilePath ".gitignore" -Encoding utf8

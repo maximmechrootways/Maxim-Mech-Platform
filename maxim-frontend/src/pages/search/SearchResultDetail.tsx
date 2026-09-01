@@ -3,22 +3,12 @@ import { Card } from '@/components/ui/Card'
 import { NotFound } from '@/components/ui/NotFound'
 import { useDocuments } from '@/contexts/DocumentsContext'
 import { useFormSubmissions } from '@/contexts/FormSubmissionsContext'
-import { fetchIncident } from '@/api/incidents'
-import { useState, useEffect } from 'react'
+import { MOCK_INCIDENTS } from '@/data/mock'
 
 export function SearchResultDetail() {
   const { type, id } = useParams<{ type: string; id: string }>()
   const { documents } = useDocuments()
   const { getSubmission } = useFormSubmissions()
-  const [incident, setIncident] = useState<{ id: string; title?: string; siteName?: string; date?: string; status?: string; severity?: string } | null>(null)
-
-  useEffect(() => {
-    if (type === 'incident' && id) {
-      fetchIncident(id).then(setIncident).catch(() => setIncident(null))
-    } else {
-      setIncident(null)
-    }
-  }, [type, id])
 
   if (!type || !id) {
     return (
@@ -31,7 +21,7 @@ export function SearchResultDetail() {
 
   const doc = type === 'document' && documents.find((d) => d.id === id)
   const sub = type === 'submission' && getSubmission(id)
-  const inc = type === 'incident' ? incident : null
+  const inc = type === 'incident' && MOCK_INCIDENTS.find((i) => i.id === id)
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -70,12 +60,12 @@ export function SearchResultDetail() {
 
       {inc && (
         <>
-          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">{inc.title ?? inc.id}</h1>
+          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">{inc.title}</h1>
           <Card padding="lg">
             <dl className="grid gap-2 text-sm">
-              {inc.siteName && <div className="flex justify-between"><dt className="text-neutral-500">Site</dt><dd>{inc.siteName}</dd></div>}
-              {inc.date && <div className="flex justify-between"><dt className="text-neutral-500">Date</dt><dd>{inc.date}</dd></div>}
-              {inc.status && <div className="flex justify-between"><dt className="text-neutral-500">Status</dt><dd>{inc.status}</dd></div>}
+              <div className="flex justify-between"><dt className="text-neutral-500">Site</dt><dd>{inc.siteName}</dd></div>
+              <div className="flex justify-between"><dt className="text-neutral-500">Date</dt><dd>{inc.date}</dd></div>
+              <div className="flex justify-between"><dt className="text-neutral-500">Status</dt><dd>{inc.status}</dd></div>
               {inc.severity && <div className="flex justify-between"><dt className="text-neutral-500">Severity</dt><dd>{inc.severity}</dd></div>}
             </dl>
           </Card>

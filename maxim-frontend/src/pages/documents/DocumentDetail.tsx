@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -9,58 +9,17 @@ import { EditingPresence } from '@/components/EditingPresence'
 import { useUser } from '@/contexts/UserContext'
 import { useDocuments } from '@/contexts/DocumentsContext'
 import { usePresence } from '@/contexts/PresenceContext'
-import { fetchLibraryDocument, fetchPdfBlob } from '@/api/library'
+import { MOCK_EMAIL_THREADS } from '@/data/mock'
 import { canUserViewDocument } from '@/utils/documentAccess'
-import type { DocumentRecord } from '@/types'
-
-function mapDoc(d: any): DocumentRecord {
-  return {
-    id: d.id,
-    name: d.name,
-    type: d.type ?? 'other',
-    siteId: d.siteId,
-    siteName: d.siteName,
-    date: d.date ?? new Date().toISOString().slice(0, 10),
-    uploadedBy: d.uploadedBy,
-    visibility: d.visibility ?? 'everyone',
-    visibleToRoles: d.visibleToRoles ?? [],
-    visibleToUserIds: d.visibleToUserIds ?? [],
-    tags: d.tags ?? [],
-    version: d.version ?? 1,
-    acknowledgedBy: d.acknowledgedBy ?? [],
-    lastOpenedAt: d.lastOpenedAt,
-    lastOpenedBy: d.lastOpenedBy,
-    lastEditedAt: d.lastEditedAt,
-    lastEditedBy: d.lastEditedBy,
-    filePath: d.filePath,
-  }
-}
 
 export function DocumentDetail() {
   const { id } = useParams()
   const { user } = useUser()
   const { documents, setDocuments } = useDocuments()
   const { getPresence, addPresence, removePresence } = usePresence()
-  const [loading, setLoading] = useState(!!id)
   const doc = documents.find((d) => d.id === id)
-
-  useEffect(() => {
-    if (!id) return
-    if (doc) {
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    fetchLibraryDocument(id)
-      .then((data) => {
-        const mapped = mapDoc(data)
-        setDocuments((prev) => (prev.some((d) => d.id === id) ? prev : [...prev, mapped]))
-      })
-      .catch(() => { })
-      .finally(() => setLoading(false))
-  }, [id, doc, setDocuments])
   const canView = doc && user && canUserViewDocument(doc, user)
-  const thread: any = undefined
+  const thread = doc ? MOCK_EMAIL_THREADS.find((t) => t.linkedRecordId === doc.id) : undefined
   const isSOP = doc?.type === 'SOP'
   const acknowledged = doc?.acknowledgedBy ?? []
   const userAcknowledged = user && acknowledged.some((a) => a.userId === user.id)
@@ -75,31 +34,6 @@ export function DocumentDetail() {
     return () => removePresence('document', id, user.id)
   }, [id, user?.id, canView])
 
-  // Fetch PDF blob and create object URL (avoids iframe being blocked by backend security headers)
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (!doc?.filePath) return
-    let revoked = false
-    fetchPdfBlob(doc.filePath)
-      .then((blob) => {
-        if (revoked) return
-        setPdfBlobUrl(URL.createObjectURL(blob))
-      })
-      .catch(() => { })
-    return () => {
-      revoked = true
-      setPdfBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null })
-    }
-  }, [doc?.filePath])
-
-  if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto py-12 text-center text-neutral-500 dark:text-neutral-400">
-        Loading…
-      </div>
-    )
-  }
-
   if (!doc) {
     return (
       <NotFound
@@ -112,7 +46,7 @@ export function DocumentDetail() {
   if (!canView) {
     return (
       <NotFound
-        title="You don't have permission to view this document."
+        title="You don’t have permission to view this document."
         backAction={<Link to="/library?view=documents">Back to documents</Link>}
       />
     )
@@ -141,17 +75,13 @@ export function DocumentDetail() {
       <Card padding="lg">
         <CardHeader>Document</CardHeader>
         <CardDescription>View the PDF in the app or open in a new tab — no download required.</CardDescription>
-        {doc.filePath ? (
-          pdfBlobUrl ? (
-            <div className="mt-4">
-              <PdfViewer fileDataUrl={pdfBlobUrl} fileName={doc.name} />
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">Loading PDF…</p>
-          )
+        {doc.fileDataUrl ? (
+          <div className="mt-4">
+            <PdfViewer fileDataUrl={doc.fileDataUrl} fileName={doc.name} />
+          </div>
         ) : (
           <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
-            This document was added without an uploaded file. New uploads from Forms & Documents include the PDF so you can view it here.
+            This document was added without an uploaded file. New uploads from Forms & documents include the PDF so you can view it here.
           </p>
         )}
       </Card>
@@ -163,7 +93,7 @@ export function DocumentDetail() {
           {doc.tags?.length ? <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">Tags: {doc.tags.join(', ')}</p> : null}
           {doc.version != null && <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Version {doc.version}</p>}
           {acknowledged.length > 0 && (
-            <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">Acknowledged by {acknowledged.length} user(s): {acknowledged.map((a) => a.acknowledgedAt).join(', ')}</p>
+            <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">Acknowledged by {acknowledged.length} user(s): {acknowledged.map((a) => a.acknowledgedAt).join(', ')} (mock IDs)</p>
           )}
           {user && !userAcknowledged && (
             <Button size="sm" className="mt-3 no-print" onClick={() => setDocuments((prev) => prev.map((d) => d.id === id ? { ...d, acknowledgedBy: [...(d.acknowledgedBy ?? []), { userId: user.id, acknowledgedAt: new Date().toISOString() }], lastEditedAt: new Date().toISOString(), lastEditedBy: user.name } : d))}>
@@ -188,20 +118,21 @@ export function DocumentDetail() {
 
       <Card padding="lg">
         <CardHeader>Signatures</CardHeader>
-        <CardDescription>Signatures on this document</CardDescription>
+        <CardDescription>Signatures on this document (mock)</CardDescription>
         <ul className="mt-2 space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
+          <li>Jordan Smith — Supervisor — Feb 9, 2025</li>
         </ul>
       </Card>
 
       <Card padding="lg">
-        <CardHeader>Related Submissions</CardHeader>
+        <CardHeader>Related submissions</CardHeader>
         <CardDescription>Forms linked to this document</CardDescription>
         <p className="mt-2 text-sm text-neutral-500">Site Inspection #f1</p>
       </Card>
 
       {thread && (
         <Card padding="lg">
-          <CardHeader>Related Conversation</CardHeader>
+          <CardHeader>Related conversation</CardHeader>
           <CardDescription>Linked thread (external)</CardDescription>
           <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">{thread.subject}</p>
           <p className="text-xs text-neutral-500 mt-1">{thread.messages.length} messages · {thread.status}</p>

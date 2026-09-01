@@ -1,11 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { MOCK_SIGNATURE_REQUESTS } from '@/data/mock'
 import { useUser } from '@/contexts/UserContext'
-import { useSigning } from '@/contexts/SigningContext'
-import { fetchSignatureRequest, signRequest } from '@/api/library'
 import { IconDownload } from '@/components/icons/NavIcons'
 
 const LOCATION_ENABLED = true
@@ -14,20 +13,7 @@ export function SignatureCapture() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useUser()
-  const { requests, refetch } = useSigning()
-  const [request, setRequest] = useState<{ id: string; documentName: string } | null>(null)
-
-  useEffect(() => {
-    if (!id) return
-    const fromList = requests.find((r) => r.id === id)
-    if (fromList) {
-      setRequest({ id: fromList.id, documentName: fromList.documentName })
-      return
-    }
-    fetchSignatureRequest(id).then((r) => r && setRequest({ id: r.id, documentName: r.documentName ?? '' })).catch(() => setRequest(null))
-  }, [id, requests])
-
-  const displayRequest = request ?? (id ? { id, documentName: 'Document' } : null)
+  const request = MOCK_SIGNATURE_REQUESTS.find((r) => r.id === id) || MOCK_SIGNATURE_REQUESTS[0]
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [signed, setSigned] = useState(false)
   const [name, setName] = useState(user?.name || '')
@@ -37,37 +23,19 @@ export function SignatureCapture() {
   const signedAt = new Date().toLocaleString()
 
   const handleDownload = () => {
-    if (!displayRequest) return
+    // Mock: In a real app, this would download the actual PDF
     const link = document.createElement('a')
     link.href = '#'
-    link.download = `${displayRequest.documentName}.pdf`
+    link.download = `${request.documentName}.pdf`
     link.click()
   }
 
-  const confirm = async () => {
-    if (!id) return
+  const confirm = () => {
     setLoading(true)
-    try {
-      await signRequest(id)
-      refetch()
-      setSigned(true)
-    } catch {
-      setLoading(false)
-    } finally {
-      setLoading(false)
-    }
+    setTimeout(() => { setLoading(false); setSigned(true) }, 600)
   }
 
   const done = () => navigate('/library?view=signing')
-
-  if (!displayRequest) {
-    return (
-      <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
-        <p className="text-neutral-500 dark:text-neutral-400">Request not found.</p>
-        <Link to="/library?view=signing" className="text-brand-600 dark:text-brand-400 hover:underline">Back to signing</Link>
-      </div>
-    )
-  }
 
   return (
     <div className="max-w-lg mx-auto space-y-6 animate-fade-in">
@@ -77,7 +45,7 @@ export function SignatureCapture() {
         </Link>
         <div>
           <h1 className="font-display font-bold text-xl text-neutral-900 dark:text-white">Sign</h1>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">{displayRequest.documentName}</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">{request.documentName}</p>
         </div>
       </div>
 
@@ -88,10 +56,8 @@ export function SignatureCapture() {
             <CardDescription>Please review the documentation before signing. You can view and download the document below.</CardDescription>
             <div className="mt-4 space-y-3">
               <div className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
-                <p className="font-medium text-neutral-900 dark:text-white mb-2">{displayRequest.documentName}</p>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">
-                  Review the documentation and sign to acknowledge you received and understand the contents. If you have any questions, please contact HR.
-                </p>
+                <p className="font-medium text-neutral-900 dark:text-white mb-2">{request.documentName}</p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">Review the documentation and sign to acknowledge you received and understand the contents. If you have any questions, please contact HR.</p>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={() => setHasViewedDocument(true)}>
                     View Document
@@ -105,7 +71,7 @@ export function SignatureCapture() {
           </Card>
 
           <Card padding="lg">
-            <CardHeader>Signing Area</CardHeader>
+            <CardHeader>Signing area</CardHeader>
             <CardDescription>Draw your signature below. Your name, role, timestamp{LOCATION_ENABLED ? ', and location' : ''} will be recorded.</CardDescription>
           <div className="relative mt-4 border-2 border-neutral-300 dark:border-neutral-600 rounded-xl bg-white dark:bg-neutral-800 min-h-[160px] flex items-center justify-center">
             <canvas ref={canvasRef} className="w-full h-40 touch-none rounded-xl" width={400} height={160} />

@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import * as auditLogApi from '@/api/auditLog'
+import { MOCK_AUDIT_LOG } from '@/data/mock'
+import type { AuditLogEntry } from '@/types'
 
-const ENTITY_LABELS: Record<string, string> = {
+const ENTITY_LABELS: Record<AuditLogEntry['entityType'], string> = {
   form: 'Form',
   injury: 'Injury report',
   document: 'Document',
@@ -12,35 +13,22 @@ const ENTITY_LABELS: Record<string, string> = {
   subcontractor: 'Subcontractor',
   capa: 'CAPA',
   certificate: 'Certificate',
-  incident: 'Incident',
 }
 
 export function AuditLog() {
-  const [filter, setFilter] = useState<string>('all')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [result, setResult] = useState<{ items: any[]; total: number }>({ items: [], total: 0 })
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    auditLogApi.fetchAuditLog({
-      entityType: filter === 'all' ? undefined : filter,
-      limit: 200,
-      offset: 0,
-      sortOrder,
-    }).then((r) => setResult(r)).catch(() => setResult({ items: [], total: 0 })).finally(() => setLoading(false))
-  }, [filter, sortOrder])
-
-  const entries = result.items
+  const [filter, setFilter] = useState<AuditLogEntry['entityType'] | 'all'>('all')
+  const entries = filter === 'all'
+    ? [...MOCK_AUDIT_LOG].sort((a, b) => b.at.localeCompare(a.at))
+    : MOCK_AUDIT_LOG.filter((e) => e.entityType === filter).sort((a, b) => b.at.localeCompare(a.at))
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Audit Log</h1>
-        <p className="text-neutral-500 dark:text-neutral-400 mt-1">Who did what when across forms, injuries, documents, and more. Immutable — view and sort only.</p>
+        <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Audit log</h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mt-1">Who did what when across forms, injuries, documents, and more</p>
       </div>
       <Card padding="md">
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4">
           <button
             type="button"
             onClick={() => setFilter('all')}
@@ -48,7 +36,7 @@ export function AuditLog() {
           >
             All
           </button>
-          {Object.keys(ENTITY_LABELS).map((type) => (
+          {(Object.keys(ENTITY_LABELS) as AuditLogEntry['entityType'][]).map((type) => (
             <button
               key={type}
               type="button"
@@ -58,20 +46,7 @@ export function AuditLog() {
               {ENTITY_LABELS[type]}
             </button>
           ))}
-          <span className="text-sm text-neutral-500 dark:text-neutral-400 ml-2">Sort:</span>
-          <select
-            aria-label="Sort by date"
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-            className="min-h-[36px] px-3 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white text-sm"
-          >
-            <option value="desc">Newest first</option>
-            <option value="asc">Oldest first</option>
-          </select>
         </div>
-        {loading ? (
-          <p className="py-4 text-sm text-neutral-500">Loading…</p>
-        ) : (
         <ul className="space-y-2">
           {entries.map((e) => (
             <li key={e.id} className="flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg border border-neutral-100 dark:border-neutral-700/50">
@@ -80,7 +55,7 @@ export function AuditLog() {
               </span>
               <span className="font-medium text-neutral-900 dark:text-white">{e.by}</span>
               <span className="text-neutral-600 dark:text-neutral-300">{e.action}</span>
-              <Badge variant="default">{ENTITY_LABELS[e.entityType] ?? e.entityType}</Badge>
+              <Badge variant="default">{ENTITY_LABELS[e.entityType]}</Badge>
               <span className="text-neutral-600 dark:text-neutral-300">{e.entityLabel ?? e.entityId}</span>
               {e.linkTo && (
                 <Link to={e.linkTo} className="text-sm text-brand-600 dark:text-brand-400 hover:underline ml-auto">
@@ -90,7 +65,6 @@ export function AuditLog() {
             </li>
           ))}
         </ul>
-        )}
       </Card>
     </div>
   )

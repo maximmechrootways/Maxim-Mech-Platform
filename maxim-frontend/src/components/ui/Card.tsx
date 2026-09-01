@@ -34,37 +34,8 @@ export function Card({ children, className = '', padding = 'md', hover, onClick 
   )
 }
 
-export function CardHeader({
-  children,
-  className = '',
-  title,
-  subtitle,
-}: {
-  children?: React.ReactNode
-  className?: string
-  /** Optional structured header (alternative to wrapping text in children). */
-  title?: string
-  subtitle?: string
-}) {
-  if (title != null || subtitle != null) {
-    return (
-      <div className={`mb-4 ${className}`}>
-        {title != null && title !== '' && (
-          <h3 className="font-display font-semibold text-lg tracking-tight text-neutral-900 dark:text-white mb-1">
-            {title}
-          </h3>
-        )}
-        {subtitle != null && subtitle !== '' && <CardDescription className="mt-0">{subtitle}</CardDescription>}
-      </div>
-    )
-  }
-  return (
-    <div
-      className={`font-display font-semibold text-lg tracking-tight text-neutral-900 dark:text-white mb-1 ${className}`}
-    >
-      {children}
-    </div>
-  )
+export function CardHeader({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <div className={`font-display font-semibold text-lg tracking-tight text-neutral-900 dark:text-white mb-1 ${className}`}>{children}</div>
 }
 
 export function CardDescription({ children, className = '' }: { children: React.ReactNode; className?: string }) {

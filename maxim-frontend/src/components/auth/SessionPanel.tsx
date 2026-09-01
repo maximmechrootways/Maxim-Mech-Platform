@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAuth, sessionRemainingTtl } from '@/contexts/AuthContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -35,9 +35,8 @@ export function SessionPanel({ onClose }: { onClose: () => void }) {
 
     if (!session) return null
 
-    const ttl = sessionRemainingTtl(session)
-    const ttlPct = Math.max(0, (ttl / (30 * 60)) * 100)
-    const jwtParts = (session.jwt || '').split('.')
+    const ttlPct = Math.max(0, (session.ttl / (30 * 60)) * 100)
+    const jwtParts = session.jwt.split('.')
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
@@ -97,14 +96,14 @@ export function SessionPanel({ onClose }: { onClose: () => void }) {
                     <Card padding="md">
                         <p className="text-xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 font-medium mb-2">Redis Session TTL</p>
                         <div className="flex items-baseline gap-2 mb-3">
-                            <span className={`font-mono text-2xl font-bold ${ttl < 300 ? 'text-red-500' : ttl < 600 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                {formatTTL(ttl)}
+                            <span className={`font-mono text-2xl font-bold ${session.ttl < 300 ? 'text-red-500' : session.ttl < 600 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                {formatTTL(session.ttl)}
                             </span>
                             <span className="text-xs text-neutral-400 dark:text-neutral-500">remaining</span>
                         </div>
                         <div className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                             <div
-                                className={`h-full rounded-full transition-all duration-1000 ${ttl < 300 ? 'bg-red-500' : ttl < 600 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                className={`h-full rounded-full transition-all duration-1000 ${session.ttl < 300 ? 'bg-red-500' : session.ttl < 600 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                                 style={{ width: `${ttlPct}%` }}
                             />
                         </div>

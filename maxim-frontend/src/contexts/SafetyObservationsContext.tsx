@@ -1,73 +1,35 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import React, { createContext, useContext, useState, useCallback } from 'react'
 import type { SafetyObservation } from '@/types'
-import * as observationsApi from '@/api/observations'
+import { MOCK_SAFETY_OBSERVATIONS } from '@/data/mock'
 
 interface SafetyObservationsContextValue {
-  loadData: () => void
   observations: SafetyObservation[]
-  loading: boolean
-  refetch: () => Promise<void>
-  addObservation: (obs: Omit<SafetyObservation, 'id'>) => Promise<void>
-  updateObservation: (id: string, updates: Partial<Omit<SafetyObservation, 'id'>>) => Promise<void>
-  removeObservation: (id: string) => Promise<void>
+  addObservation: (obs: Omit<SafetyObservation, 'id'>) => void
+  updateObservation: (id: string, updates: Partial<Omit<SafetyObservation, 'id'>>) => void
+  removeObservation: (id: string) => void
 }
 
 const SafetyObservationsContext = createContext<SafetyObservationsContextValue | null>(null)
 
 export function SafetyObservationsProvider({ children }: { children: React.ReactNode }) {
-  const [hasFetched, setHasFetched] = useState(false)
-  const loadData = useCallback(() => setHasFetched(true), [])
-  const [observations, setObservations] = useState<SafetyObservation[]>([])
-  const [loading, setLoading] = useState(true)
+  const [observations, setObservations] = useState<SafetyObservation[]>(MOCK_SAFETY_OBSERVATIONS)
 
-  const refetch = useCallback(async () => {
-    try {
-      setLoading(true)
-      const list = await observationsApi.fetchObservations()
-      setObservations(Array.isArray(list) ? list : [])
-    } catch {
-      setObservations([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-  useEffect(() => {
-    if (!hasFetched) return;
-    refetch()
-  }, [hasFetched, refetch])
-
-  const addObservation = useCallback(async (obs: Omit<SafetyObservation, 'id'>) => {
-    const created = await observationsApi.createObservation({
-      siteName: obs.siteName,
-      type: obs.type,
-      description: obs.description,
-      observedBy: obs.observedBy,
-      observedAt: obs.observedAt,
-    })
-    setObservations((prev) => [created, ...prev])
+  const addObservation = useCallback((obs: Omit<SafetyObservation, 'id'>) => {
+    setObservations((prev) => [...prev, { ...obs, id: `so-${Date.now()}` }])
   }, [])
 
-  const updateObservation = useCallback(async (id: string, updates: Partial<Omit<SafetyObservation, 'id'>>) => {
-    const updated = await observationsApi.updateObservation(id, {
-      siteName: updates.siteName,
-      type: updates.type,
-      description: updates.description,
-      observedBy: updates.observedBy,
-      observedAt: updates.observedAt,
-    })
-    setObservations((prev) => prev.map((o) => (o.id === id ? updated : o)))
+  const updateObservation = useCallback((id: string, updates: Partial<Omit<SafetyObservation, 'id'>>) => {
+    setObservations((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, ...updates } : o))
+    )
   }, [])
 
-  const removeObservation = useCallback(async (id: string) => {
-    await observationsApi.deleteObservation(id)
+  const removeObservation = useCallback((id: string) => {
     setObservations((prev) => prev.filter((o) => o.id !== id))
   }, [])
 
   return (
-    <SafetyObservationsContext.Provider value={{
-      loadData,
-      observations, loading, refetch, addObservation, updateObservation, removeObservation
-    }}>
+    <SafetyObservationsContext.Provider value={{ observations, addObservation, updateObservation, removeObservation }}>
       {children}
     </SafetyObservationsContext.Provider>
   )
@@ -75,23 +37,12 @@ export function SafetyObservationsProvider({ children }: { children: React.React
 
 export function useSafetyObservations() {
   const ctx = useContext(SafetyObservationsContext)
-
-  useEffect(() => {
-    if (ctx && ctx.loadData) {
-      ctx.loadData()
-    }
-  }, [ctx])
-
   if (!ctx)
     return {
-      loadData: () => { },
-      observations: [] as SafetyObservation[],
-      loading: false,
-      refetch: async () => { },
-      addObservation: async () => { },
-      updateObservation: async () => { },
-      removeObservation: async () => { },
+      observations: MOCK_SAFETY_OBSERVATIONS,
+      addObservation: () => {},
+      updateObservation: () => {},
+      removeObservation: () => {},
     }
-
   return ctx
 }

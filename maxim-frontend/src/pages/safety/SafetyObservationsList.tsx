@@ -12,11 +12,10 @@ import type { SafetyObservation } from '@/types'
 
 export function SafetyObservationsList() {
   const { user } = useUser()
-  const { observations, loading, addObservation, updateObservation, removeObservation } = useSafetyObservations()
+  const { observations, addObservation, updateObservation, removeObservation } = useSafetyObservations()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const [siteName, setSiteName] = useState('')
   const [type, setType] = useState<'positive' | 'corrective'>('positive')
   const [description, setDescription] = useState('')
@@ -50,50 +49,45 @@ export function SafetyObservationsList() {
     setEditingId(null)
   }
 
-  const save = async () => {
+  const save = () => {
     const at = observedAt ? new Date(observedAt).toISOString() : new Date().toISOString()
-    setSaving(true)
-    try {
-      if (editingId) {
-        await updateObservation(editingId, {
-          siteName: siteName.trim(),
-          type,
-          description: description.trim(),
-          observedBy: observedBy.trim(),
-          observedAt: at,
-        })
-      } else {
-        await addObservation({
-          siteName: siteName.trim(),
-          type,
-          description: description.trim(),
-          observedBy: observedBy.trim(),
-          observedAt: at,
-        })
-      }
-      closeForm()
-    } finally {
-      setSaving(false)
+    if (editingId) {
+      updateObservation(editingId, {
+        siteName: siteName.trim(),
+        type,
+        description: description.trim(),
+        observedBy: observedBy.trim(),
+        observedAt: at,
+      })
+    } else {
+      addObservation({
+        siteName: siteName.trim(),
+        type,
+        description: description.trim(),
+        observedBy: observedBy.trim(),
+        observedAt: at,
+      })
     }
+    closeForm()
   }
 
-  const confirmDelete = async (id: string) => {
-    await removeObservation(id)
+  const confirmDelete = (id: string) => {
+    removeObservation(id)
     setDeleteId(null)
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & Safety</Link>
+      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & safety</Link>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Safety Observations</h1>
+          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Safety observations</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
             {isHr ? 'Positive and corrective observations. HR can add, edit, and remove entries.' : 'Positive and corrective observations by site.'}
           </p>
         </div>
         {isHr && (
-          <Button size="sm" onClick={openCreate}>Add Observation</Button>
+          <Button size="sm" onClick={openCreate}>Add observation</Button>
         )}
       </div>
 
@@ -118,7 +112,7 @@ export function SafetyObservationsList() {
             <Input label="Observed by" value={observedBy} onChange={(e) => setObservedBy(e.target.value)} placeholder="Name" required />
             <Input label="Observed at" type="datetime-local" value={observedAt} onChange={(e) => setObservedAt(e.target.value)} />
             <div className="flex gap-2">
-              <Button onClick={save} disabled={!siteName.trim() || !description.trim() || !observedBy.trim() || saving}>{editingId ? 'Save changes' : 'Add Observation'}</Button>
+              <Button onClick={save} disabled={!siteName.trim() || !description.trim() || !observedBy.trim()}>{editingId ? 'Save changes' : 'Add observation'}</Button>
               <Button variant="ghost" onClick={closeForm}>Cancel</Button>
             </div>
           </div>
@@ -130,7 +124,7 @@ export function SafetyObservationsList() {
           <EmptyState
             title="No safety observations"
             description={isHr ? 'Add a positive or corrective observation.' : 'No observations yet.'}
-            action={isHr ? <Button size="sm" onClick={openCreate}>Add Observation</Button> : undefined}
+            action={isHr ? <Button size="sm" onClick={openCreate}>Add observation</Button> : undefined}
           />
         </Card>
       ) : (
@@ -161,7 +155,7 @@ export function SafetyObservationsList() {
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" onClick={() => setDeleteId(null)}>
           <Card padding="lg" className="max-w-md w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display font-bold text-xl text-neutral-900 dark:text-white">Delete This Observation?</h2>
+            <h2 className="font-display font-bold text-xl text-neutral-900 dark:text-white">Delete this observation?</h2>
             <p className="mt-2 text-neutral-600 dark:text-neutral-400">This cannot be undone.</p>
             <div className="mt-6 flex gap-3 justify-end">
               <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancel</Button>

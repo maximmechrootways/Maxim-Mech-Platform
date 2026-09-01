@@ -3,12 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateRefreshToken = exports.verifyCalendarConnectState = exports.signCalendarConnectState = exports.verifyAccessToken = exports.generateAccessToken = void 0;
+exports.generateRefreshToken = exports.verifyAccessToken = exports.generateAccessToken = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const uuid_1 = require("uuid");
 const prisma_1 = require("../lib/prisma");
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
-const ACCESS_TOKEN_EXPIRES_IN = '15m';
+const ACCESS_TOKEN_EXPIRES_IN = '30m';
 const REFRESH_TOKEN_DAYS = 7;
 const generateAccessToken = (payload) => {
     return jsonwebtoken_1.default.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN });
@@ -18,18 +18,6 @@ const verifyAccessToken = (token) => {
     return jsonwebtoken_1.default.verify(token, JWT_SECRET);
 };
 exports.verifyAccessToken = verifyAccessToken;
-/** Short-lived state token for OAuth callbacks (e.g. Google Calendar connect). */
-const signCalendarConnectState = (userId) => {
-    return jsonwebtoken_1.default.sign({ userId, purpose: 'google-calendar-connect' }, JWT_SECRET, { expiresIn: '10m' });
-};
-exports.signCalendarConnectState = signCalendarConnectState;
-const verifyCalendarConnectState = (state) => {
-    const decoded = jsonwebtoken_1.default.verify(state, JWT_SECRET);
-    if (decoded.purpose !== 'google-calendar-connect' || !decoded.userId)
-        throw new Error('Invalid state');
-    return { userId: decoded.userId };
-};
-exports.verifyCalendarConnectState = verifyCalendarConnectState;
 const generateRefreshToken = async (userId) => {
     const token = (0, uuid_1.v4)();
     const expiresAt = new Date();

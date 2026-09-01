@@ -10,25 +10,11 @@ const roleLabels: Record<UserRole, string> = {
   labourer: 'Labourer',
 }
 
-/** Owner/HR can switch view from dropdown. Others see their role badge. */
 export function RoleSwitcher() {
   const { user, switchRole } = useUser()
   const [open, setOpen] = useState(false)
 
   if (!user) return null
-
-  const actualRole = (user.actualRole ?? user.role) as UserRole
-  const canSwitch = actualRole === 'owner' || actualRole === 'hr'
-  const switchableRoles: UserRole[] =
-    actualRole === 'owner'
-      ? ['owner', 'hr', 'supervisor', 'labourer']
-      : actualRole === 'hr'
-        ? ['owner', 'hr', 'supervisor', 'labourer']
-        : [user.role]
-
-  if (!canSwitch) {
-    return <Badge variant="info">{roleLabels[user.role]}</Badge>
-  }
 
   return (
     <div className="relative">
@@ -38,7 +24,7 @@ export function RoleSwitcher() {
         className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-left min-w-0 max-w-[140px] md:max-w-none"
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-label="Switch view"
+        aria-label="Switch role"
       >
         <Badge variant="info" className="shrink-0">{roleLabels[user.role]}</Badge>
         <svg className="w-4 h-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -50,7 +36,7 @@ export function RoleSwitcher() {
             role="listbox"
             className="absolute left-0 top-full mt-1 z-20 min-w-[160px] rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-soft-lg py-1 animate-slide-up"
           >
-            {switchableRoles.map((role) => (
+            {(['owner', 'hr', 'supervisor', 'labourer'] as UserRole[]).map((role) => (
               <li key={role}>
                 <button
                   type="button"

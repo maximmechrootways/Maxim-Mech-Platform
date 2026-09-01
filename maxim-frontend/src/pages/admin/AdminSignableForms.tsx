@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Badge } from '@/components/ui/Badge'
+import { MOCK_APP_USERS } from '@/data/mock'
 import { useSignableTemplates } from '@/contexts/SignableTemplatesContext'
-import { fetchUsersAdmin } from '@/api/users'
 import type { UserRole } from '@/types'
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
@@ -18,10 +18,6 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 
 export function AdminSignableForms() {
   const { templates, addTemplate, updateTemplate } = useSignableTemplates()
-  const [appUsers, setAppUsers] = useState<{ id: string; name: string; role?: string }[]>([])
-  useEffect(() => {
-    fetchUsersAdmin().then((list) => setAppUsers(Array.isArray(list) ? list.map((u: { id: string; firstName?: string; lastName?: string; name?: string; role?: string }) => ({ id: u.id, name: u.name ?? ([u.firstName, u.lastName].filter(Boolean).join(' ') || ''), role: u.role })) : [])).catch(() => setAppUsers([]))
-  }, [])
   const [showAdd, setShowAdd] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDescription, setNewDescription] = useState('')
@@ -70,13 +66,13 @@ export function AdminSignableForms() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Custom Forms to Sign</h1>
+          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Custom forms to sign</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">Add and manage forms that supervisors (or others) must fill out and sign on a schedule</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Link to="/admin/users" className="text-sm text-neutral-600 dark:text-neutral-400 hover:underline">Users</Link>
           <Link to="/admin/templates" className="text-sm text-neutral-600 dark:text-neutral-400 hover:underline">Templates</Link>
-          <Link to="/library?view=templates" className="text-sm text-neutral-600 dark:text-neutral-400 hover:underline">Forms & Documents</Link>
+          <Link to="/library?view=templates" className="text-sm text-neutral-600 dark:text-neutral-400 hover:underline">Forms & documents</Link>
           <Link to="/admin/notifications" className="text-sm text-neutral-600 dark:text-neutral-400 hover:underline">Notifications</Link>
           <Button onClick={() => setShowAdd(true)}>Add new form to sign</Button>
         </div>
@@ -84,8 +80,8 @@ export function AdminSignableForms() {
 
       {showAdd && (
         <Card padding="lg">
-          <CardHeader>Add New Custom Form to Sign</CardHeader>
-          <CardDescription>Assign by role and/or to specific people. Everyone assigned will see the form in Daily Forms.</CardDescription>
+          <CardHeader>Add new custom form to sign</CardHeader>
+          <CardDescription>Assign by role and/or to specific people. Everyone assigned will see the form in Daily forms.</CardDescription>
           <div className="mt-4 space-y-4 max-w-xl">
             <Input label="Form name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Daily Safety Checklist" />
             <Textarea label="Description (optional)" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="What this form is for" rows={2} />
@@ -103,7 +99,7 @@ export function AdminSignableForms() {
             <div>
               <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Or assign to specific people</p>
               <div className="flex flex-wrap gap-2">
-                {appUsers.map((u) => (
+                {MOCK_APP_USERS.map((u) => (
                   <label key={u.id} className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={newAssignUserIds.includes(u.id)} onChange={() => toggleUser(u.id)} className="rounded border-neutral-300 text-brand-600" />
                     <span className="text-sm">{u.name} ({u.role})</span>
@@ -121,7 +117,7 @@ export function AdminSignableForms() {
               </select>
             </div>
             <div className="flex gap-2">
-              <Button onClick={addForm}>Add Form</Button>
+              <Button onClick={addForm}>Add form</Button>
               <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
             </div>
           </div>

@@ -14,9 +14,9 @@ export function QuickCaptureModal({ onClose }: { onClose: () => void }) {
   const [site, setSite] = useState('')
 
   const go = () => {
-    if (type === 'incident') navigate('/safety/incidents/new')
-    else if (type === 'near-miss') navigate('/safety/near-miss?create=1')
-    else navigate('/safety/hazards')
+    if (type === 'incident') navigate('/forms/new/t2')
+    else if (type === 'near-miss') navigate('/forms/new/t4')
+    else navigate('/forms/new/t5')
     onClose()
   }
 

@@ -1,59 +1,19 @@
-import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useUser } from '@/contexts/UserContext'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { useSigning } from '@/contexts/SigningContext'
-import { fetchSignatureRequest } from '@/api/library'
-import type { SignatureRequest } from '@/types'
+import { MOCK_SIGNATURE_REQUESTS } from '@/data/mock'
 
 export function SigningRequest() {
   const { id } = useParams()
   const { user } = useUser()
-  const { requests } = useSigning()
-  const [detail, setDetail] = useState<SignatureRequest | null>(null)
   const isLabourer = user?.role === 'labourer'
-  const isCurrentUserSigner = (r: SignatureRequest) =>
+  const isCurrentUserSigner = (r: (typeof MOCK_SIGNATURE_REQUESTS)[0]) =>
     r.requiredSigners.some((s) => s.userId === user?.id || s.name === user?.name)
-  const requestsForLabourer = requests.filter(isCurrentUserSigner)
-  const requestList = isLabourer ? requestsForLabourer : requests
-  const requestFromList = id ? requestList.find((r) => r.id === id) : null
-
-  useEffect(() => {
-    if (!id) {
-      setDetail(null)
-      return
-    }
-    if (requestFromList) {
-      setDetail(null)
-      return
-    }
-    fetchSignatureRequest(id)
-      .then((r) =>
-        setDetail(
-          r
-            ? {
-                id: r.id,
-                documentName: r.documentName ?? '',
-                requiredSigners: (r.requiredSigners ?? []).map((s: any) => ({
-                  id: s.id,
-                  name: s.name ?? '',
-                  role: s.role ?? '',
-                  status: s.status ?? 'pending',
-                  userId: s.userId,
-                  signedAt: s.signedAt,
-                })),
-                dueDate: r.dueDate ?? '',
-                remindersSent: r.remindersSent ?? 0,
-              }
-            : null
-        )
-      )
-      .catch(() => setDetail(null))
-  }, [id, requestFromList])
-
-  const request = requestFromList ?? detail
+  const requestsForLabourer = MOCK_SIGNATURE_REQUESTS.filter(isCurrentUserSigner)
+  const requestList = isLabourer ? requestsForLabourer : MOCK_SIGNATURE_REQUESTS
+  const request = id ? (isLabourer ? requestsForLabourer.find((r) => r.id === id) : MOCK_SIGNATURE_REQUESTS.find((r) => r.id === id)) : null
 
   if (!request && id) {
     return (
@@ -68,7 +28,7 @@ export function SigningRequest() {
     return (
       <div className="space-y-6 animate-fade-in">
         <div>
-          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Signing & Acknowledgements</h1>
+          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Signing & acknowledgements</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">{isLabourer ? 'Documents waiting for your signature' : 'Signature requests and status'}</p>
         </div>
         {requestList.length === 0 ? (
@@ -109,7 +69,7 @@ export function SigningRequest() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </Link>
         <div>
-          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Signature Request</h1>
+          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Signature request</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">Required signers, reminders, due date</p>
         </div>
       </div>
@@ -141,7 +101,7 @@ export function SigningRequest() {
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {!isLabourer && (
-            <Button variant="ghost" size="sm">Send Reminder</Button>
+            <Button variant="ghost" size="sm">Send reminder</Button>
           )}
           <Link to={`/signing/${request.id}/sign`}>
             <Button size="sm">Sign</Button>

@@ -136,9 +136,9 @@ export function InjuryAnalytics() {
     const repeatInjuries = byPerson.filter((p) => p.reports.length > 1).length
     const repeatPersonCount = byPerson.filter((p) => p.reports.length > 1).reduce((s, p) => s + p.reports.length, 0)
     const recordables = filtered.length
-    const totalHours = 0
-    const trir = totalHours > 0 ? recordables * 200000 / totalHours : 0
-    const dart = totalHours > 0 ? (daysAway + restrictedDays) * 200000 / totalHours : 0
+    const MOCK_HOURS = 100000
+    const trir = recordables * 200000 / MOCK_HOURS
+    const dart = (daysAway + restrictedDays) * 200000 / MOCK_HOURS
     return { lostTime, daysAway, restrictedDays, open, closed, wsibReported, repeatInjuries, repeatPersonCount, trir, dart }
   }, [filtered, byPerson])
 
@@ -146,11 +146,11 @@ export function InjuryAnalytics() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Injury Analytics</h1>
+          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Injury analytics</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1">Track types, who was injured, and key metrics</p>
         </div>
         <div className="flex gap-2">
-          <Link to="/injury-reports"><Button variant="secondary">All Reports</Button></Link>
+          <Link to="/injury-reports"><Button variant="secondary">All reports</Button></Link>
           <div className="flex rounded-lg border border-neutral-200 dark:border-neutral-600 overflow-hidden">
             {(['all', 'ytd', '90'] as const).map((r) => (
               <button
@@ -168,7 +168,7 @@ export function InjuryAnalytics() {
 
       {/* Summary metrics */}
       <Card padding="lg">
-        <CardHeader>Summary Metrics</CardHeader>
+        <CardHeader>Summary metrics</CardHeader>
         <CardDescription>Totals for selected period ({filtered.length} injuries)</CardDescription>
         <div className="mt-4 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           <div className="rounded-xl border border-neutral-200 dark:border-neutral-600 p-4">
@@ -209,28 +209,28 @@ export function InjuryAnalytics() {
           </div>
           <div className="rounded-xl border border-neutral-200 dark:border-neutral-600 p-4">
             <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totals.trir.toFixed(2)}</p>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">TRIR</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">TRIR (mock)</p>
           </div>
           <div className="rounded-xl border border-neutral-200 dark:border-neutral-600 p-4">
             <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totals.dart.toFixed(2)}</p>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">DART</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">DART (mock)</p>
           </div>
         </div>
-        <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">TRIR = recordables × 200,000 / hours. DART = (days away + restricted) × 200,000 / hours. Configure total hours for your organization to see rates.</p>
+        <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">TRIR = recordables × 200,000 / hours. DART = (days away + restricted) × 200,000 / hours. Hours = 100,000 (mock).</p>
       </Card>
 
       {/* Who was injured */}
       <Card padding="lg">
-        <CardHeader>Who Was Injured</CardHeader>
+        <CardHeader>Who was injured</CardHeader>
         <CardDescription>Track individuals; click a report to view details</CardDescription>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-200 dark:border-neutral-600 text-left text-neutral-500 dark:text-neutral-400">
-                <th className="py-2 pr-4 font-medium">Injured Person</th>
+                <th className="py-2 pr-4 font-medium">Injured person</th>
                 <th className="py-2 pr-4 font-medium">Count</th>
                 <th className="py-2 pr-4 font-medium">Type</th>
-                <th className="py-2 pr-4 font-medium">Body Part</th>
+                <th className="py-2 pr-4 font-medium">Body part</th>
                 <th className="py-2 pr-4 font-medium">Site</th>
                 <th className="py-2 pr-4 font-medium">Date</th>
                 <th className="py-2 pr-4 font-medium">Severity</th>
@@ -260,7 +260,7 @@ export function InjuryAnalytics() {
       {/* By type, body part, mechanism */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card padding="md">
-          <CardHeader className="text-base">By Injury Type</CardHeader>
+          <CardHeader className="text-base">By injury type</CardHeader>
           <ul className="mt-2 space-y-1.5">
             {byType.length === 0 ? <li className="text-sm text-neutral-500">No data</li> : byType.map(({ label, value }) => (
               <li key={label} className="flex justify-between text-sm">
@@ -271,7 +271,7 @@ export function InjuryAnalytics() {
           </ul>
         </Card>
         <Card padding="md">
-          <CardHeader className="text-base">By Body Part</CardHeader>
+          <CardHeader className="text-base">By body part</CardHeader>
           <ul className="mt-2 space-y-1.5">
             {byBodyPart.length === 0 ? <li className="text-sm text-neutral-500">No data</li> : byBodyPart.map(({ label, value }) => (
               <li key={label} className="flex justify-between text-sm">
@@ -282,7 +282,7 @@ export function InjuryAnalytics() {
           </ul>
         </Card>
         <Card padding="md">
-          <CardHeader className="text-base">By Mechanism</CardHeader>
+          <CardHeader className="text-base">By mechanism</CardHeader>
           <ul className="mt-2 space-y-1.5">
             {byMechanism.length === 0 ? <li className="text-sm text-neutral-500">No data</li> : byMechanism.map(({ label, value }) => (
               <li key={label} className="flex justify-between text-sm">
@@ -297,7 +297,7 @@ export function InjuryAnalytics() {
       {/* By severity, site, month */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card padding="md">
-          <CardHeader className="text-base">By Severity</CardHeader>
+          <CardHeader className="text-base">By severity</CardHeader>
           <ul className="mt-2 space-y-1.5">
             {bySeverity.map(({ label, value }) => (
               <li key={label} className="flex justify-between text-sm">
@@ -308,7 +308,7 @@ export function InjuryAnalytics() {
           </ul>
         </Card>
         <Card padding="md">
-          <CardHeader className="text-base">By Site</CardHeader>
+          <CardHeader className="text-base">By site</CardHeader>
           <ul className="mt-2 space-y-1.5">
             {bySite.length === 0 ? <li className="text-sm text-neutral-500">No data</li> : bySite.map(({ label, value }) => (
               <li key={label} className="flex justify-between text-sm">
@@ -319,7 +319,7 @@ export function InjuryAnalytics() {
           </ul>
         </Card>
         <Card padding="md">
-          <CardHeader className="text-base">By Month</CardHeader>
+          <CardHeader className="text-base">By month</CardHeader>
           <ul className="mt-2 space-y-1.5">
             {byMonth.length === 0 ? <li className="text-sm text-neutral-500">No data</li> : byMonth.slice(-12).map(({ label, value }) => (
               <li key={label} className="flex justify-between text-sm">

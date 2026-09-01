@@ -21,9 +21,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     name: session.userName,
     email: session.userEmail,
     role: session.role as UserRole,
-    actualRole: (session.actualRole ?? session.role) as UserRole,
-    active: true,
-    uiPreferences: session.uiPreferences,
+    active: true
   } : null
 
   const setUser = () => { }

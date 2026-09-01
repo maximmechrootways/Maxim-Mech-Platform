@@ -10,20 +10,19 @@ declare global {
 }
 
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
-    let token = req.headers.authorization?.split(' ')[1]
-    if (!token && req.query.token && typeof req.query.token === 'string') {
-        token = req.query.token
+    const authHeader = req.headers.authorization
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized: No token provided' })
     }
 
-    if (!token) {
-        return res.status(401).json({ error: 'Authentication required' })
-    }
+    const token = authHeader.split(' ')[1]
 
     try {
         const decoded = verifyAccessToken(token)
         req.user = decoded
         next()
     } catch (error) {
-        return res.status(401).json({ error: 'Invalid or expired token' })
+        return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' })
     }
 }

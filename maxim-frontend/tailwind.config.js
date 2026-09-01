@@ -5,17 +5,6 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: 'rgb(var(--color-bg) / <alpha-value>)',
-        foreground: 'rgb(var(--color-text) / <alpha-value>)',
-        border: 'rgb(var(--color-border) / <alpha-value>)',
-        primary: {
-          DEFAULT: 'rgb(var(--color-brand) / <alpha-value>)',
-          foreground: 'rgb(var(--color-bg) / <alpha-value>)',
-        },
-        muted: {
-          DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
-          foreground: 'rgb(var(--color-text-muted) / <alpha-value>)',
-        },
         brand: {
           50: '#eef6fc',
           100: '#d9eaf8',

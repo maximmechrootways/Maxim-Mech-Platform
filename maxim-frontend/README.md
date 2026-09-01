@@ -8,7 +8,7 @@ A **frontend-only** design concept and prototype for Maxim’s internal platform
 
 | Area | Features |
 |------|----------|
-| **Roles & dashboards** | Owner, HR, Supervisor, Labourer; use separate logins per view; role-specific dashboards (KPIs, charts, quick links) |
+| **Roles & dashboards** | Owner, HR, Supervisor, Labourer with role switcher; role-specific dashboards (KPIs, charts, quick links) |
 | **Forms & documents** | PDF templates with placed fields; Library with Templates / Submissions / Documents / Signing; upload PDF, place fields, assign by role or people |
 | **PDF form editor** | Place text/date/signature fields on PDF; **drag to move**, **resize by corner handle**; delete via **X on overlay** or **Remove** in sidebar; **required-field red \***; **all templates editable** |
 | **Daily forms** | **Supervisor fills and signs → can send to labourers to sign**; labourers see "Waiting for your signature" in Daily forms and Library → Signing; sign page to add signature |
@@ -23,18 +23,9 @@ A **frontend-only** design concept and prototype for Maxim’s internal platform
 
 ---
 
-## Roles and demo logins
+## Roles
 
-There is **no role switcher**; use different logins to see each view. Create the demo users by running the backend seed (from `maxim-backend`):  
-`npx ts-node scripts/seed-demo-users.ts` (after `npm run db:generate`). Then use:
-
-| View | Email | Password |
-|------|--------|----------|
-| **Labourer** | tommylabs@maximmech.com | Tommylabs2000 |
-| **Supervisor** | jimsupervisor@gmail.com | Jimsupervisor2000 |
-| **HR** | brandonhr@maximmech.com | Brandonhr2000 |
-
-(Owner accounts are created separately by your team.)
+The app has four roles. The **role switcher** in the header (after login) lets you switch users to see different dashboards and navigation.
 
 | Role | Description | Key access |
 |------|-------------|------------|

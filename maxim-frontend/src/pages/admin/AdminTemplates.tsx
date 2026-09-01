@@ -3,8 +3,20 @@ import { Link } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { MOCK_FORM_TEMPLATES } from '@/data/mock'
+
+const MOCK_TEMPLATES = Object.values(MOCK_FORM_TEMPLATES).map((t) => ({
+  id: t.id,
+  name: t.name,
+  version: t.version,
+  archived: t.archived,
+  lastModified: '2025-02-01',
+  category: t.category,
+  regulatoryRef: (t as { regulatoryRef?: string }).regulatoryRef,
+}))
+
 export function AdminTemplates() {
-  const [templates, setTemplates] = useState<{ id: string; name: string; version: number; archived: boolean; lastModified: string; category?: string; regulatoryRef?: string }[]>([])
+  const [templates, setTemplates] = useState(MOCK_TEMPLATES)
   const [showCreate, setShowCreate] = useState(false)
 
   const archive = (id: string) => {
@@ -15,8 +27,8 @@ export function AdminTemplates() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Form Template Management</h1>
-          <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">HR creates custom forms with text fields for incident reports, near-miss, hazards, site inspections, and more. Workers fill them out and submit; you review in Forms & Documents and in each safety list.</p>
+          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Form template management</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">HR creates custom forms with text fields for incident reports, near-miss, hazards, site inspections, and more. Workers fill them out and submit; you review in Forms & documents and in each safety list.</p>
         </div>
         <div className="flex gap-2">
           <Link to="/admin/users" className="text-sm text-neutral-600 dark:text-neutral-400 hover:underline">Users</Link>
@@ -28,7 +40,7 @@ export function AdminTemplates() {
 
       {showCreate && (
         <Card padding="lg">
-          <CardHeader>Create or Edit Template</CardHeader>
+          <CardHeader>Create or edit template</CardHeader>
           <CardDescription>Add a template with sections and text fields (e.g. Description, Location). Use it for incident reports, near-miss, hazards, or other custom forms.</CardDescription>
           <div className="mt-4 space-y-4">
             <input placeholder="Template name" className="w-full min-h-[44px] px-4 rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white" />

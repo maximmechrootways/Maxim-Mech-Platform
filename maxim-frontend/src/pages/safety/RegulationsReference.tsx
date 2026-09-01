@@ -4,16 +4,11 @@ import { Card } from '@/components/ui/Card'
 export function RegulationsReference() {
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl">
-      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & Safety</Link>
+      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & safety</Link>
       <div>
-        <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Regulatory Reference</h1>
+        <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Regulatory reference</h1>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">HR/legal: key frameworks and reporting requirements (informational).</p>
       </div>
-      <Card padding="md" className="bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700">
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          <strong>Green book / reference PDF:</strong> You can upload a single reference PDF (e.g. provincial green book or internal policy) in <Link to="/library" className="text-brand-600 dark:text-brand-400 hover:underline">Library</Link> and link or embed it here when needed. This page is the static regulatory summary; the PDF is for the full document.
-        </p>
-      </Card>
       <Card padding="lg">
         <h2 className="font-display font-semibold text-lg text-neutral-900 dark:text-white mb-3">OSHA (US) / Provincial OHS (Canada)</h2>
         <ul className="list-disc list-inside space-y-2 text-sm text-neutral-600 dark:text-neutral-400">

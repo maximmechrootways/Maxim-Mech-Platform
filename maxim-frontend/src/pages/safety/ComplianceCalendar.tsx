@@ -1,35 +1,25 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import * as complianceApi from '@/api/complianceCalendar'
+import { MOCK_COMPLIANCE_CALENDAR } from '@/data/mock'
 
 export function ComplianceCalendar() {
-  const [events, setEvents] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    complianceApi.fetchComplianceDue().then((data) => setEvents(Array.isArray(data) ? data : [])).catch(() => setEvents([])).finally(() => setLoading(false))
-  }, [])
-
-  const sortedEvents = [...events].sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+  const events = [...MOCK_COMPLIANCE_CALENDAR].sort((a, b) => a.dueDate.localeCompare(b.dueDate))
   const now = new Date().toISOString().slice(0, 10)
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & Safety</Link>
+      <Link to="/safety" className="inline-flex items-center gap-1 text-sm text-brand-600 dark:text-brand-400 hover:underline">← Health & safety</Link>
       <div>
-        <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Compliance Calendar</h1>
+        <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Compliance calendar</h1>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">Certificate expirations, inspection due dates, and report deadlines.</p>
       </div>
       <Card padding="lg">
-        {loading ? (
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading…</p>
-        ) : sortedEvents.length === 0 ? (
+        {events.length === 0 ? (
           <p className="text-sm text-neutral-500 dark:text-neutral-400">No compliance events scheduled.</p>
         ) : (
           <ul className="space-y-3">
-            {sortedEvents.map((e) => {
+            {events.map((e) => {
               const isOverdue = e.dueDate < now
               return (
                 <li key={e.id}>

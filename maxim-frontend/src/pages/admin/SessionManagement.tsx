@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAuth, sessionRemainingTtl } from '@/contexts/AuthContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -51,9 +51,7 @@ export function SessionManagement() {
     const active = allSessions.filter(s => s.status === 'active')
     const expired = allSessions.filter(s => s.status === 'expired')
     const revoked = allSessions.filter(s => s.status === 'revoked')
-    const avgTtl = active.length
-        ? Math.floor(active.reduce((a, s) => a + sessionRemainingTtl(s), 0) / active.length)
-        : 0
+    const avgTtl = active.length ? Math.floor(active.reduce((a, s) => a + s.ttl, 0) / active.length) : 0
     const heartbeatHealthy = active.filter(s => s.heartbeatStatus === 'connected').length
     const heartbeatPct = active.length ? Math.round((heartbeatHealthy / active.length) * 100) : 0
 
@@ -97,9 +95,7 @@ export function SessionManagement() {
                             </tr>
                         </thead>
                         <tbody>
-                            {allSessions.map(s => {
-                                const ttl = sessionRemainingTtl(s)
-                                return (
+                            {allSessions.map(s => (
                                 <tr key={s.id} className="border-b border-neutral-100 dark:border-neutral-800/50 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30 transition-colors">
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-3">
@@ -125,11 +121,11 @@ export function SessionManagement() {
                                     </td>
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-2">
-                                            <span className={`font-mono text-xs font-semibold ${ttl < 300 ? 'text-red-500' : ttl < 600 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                                {ttl > 0 ? formatTTL(ttl) : '00:00'}
+                                            <span className={`font-mono text-xs font-semibold ${s.ttl < 300 ? 'text-red-500' : s.ttl < 600 ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                {s.ttl > 0 ? formatTTL(s.ttl) : '00:00'}
                                             </span>
                                             <div className="hidden lg:block w-16 h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                                                <div className={`h-full rounded-full transition-all duration-1000 ${ttl < 300 ? 'bg-red-500' : ttl < 600 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.max(0, (ttl / (30 * 60)) * 100)}%` }} />
+                                                <div className={`h-full rounded-full transition-all duration-1000 ${s.ttl < 300 ? 'bg-red-500' : s.ttl < 600 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.max(0, (s.ttl / (30 * 60)) * 100)}%` }} />
                                             </div>
                                         </div>
                                     </td>
@@ -145,8 +141,7 @@ export function SessionManagement() {
                                         )}
                                     </td>
                                 </tr>
-                                )
-                            })}
+                            ))}
                             {allSessions.length === 0 && (
                                 <tr>
                                     <td colSpan={7} className="text-center py-12 text-neutral-400 dark:text-neutral-500">No active sessions</td>

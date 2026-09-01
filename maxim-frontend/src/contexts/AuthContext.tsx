@@ -1,45 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
-import axios from 'axios'
-import type { AuthRole, Session, UiPreferences } from '@/types'
-import { api, setAuthToken, apiPath, API_PUBLIC_ORIGIN } from '@/api'
+import type { AuthRole, JWTPayload, Session } from '@/types'
+import { api } from '@/api'
+import { jwtDecode } from 'jwt-decode'
+
+/* ── helpers ─────────────────────────────────────────────────── */
 
 function uid(): string {
     return 'sess_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
 }
 
-const SESSION_TTL_SECONDS = 15 * 60
+const SESSION_TTL_SECONDS = 30 * 60 // 30 minutes
 
-/** Live remaining seconds from session.expiresAt (prefer over stale session.ttl). */
-export function sessionRemainingTtl(session: { expiresAt: string; ttl?: number; status?: string } | null | undefined): number {
-    if (!session) return 0
-    if (session.status && session.status !== 'active') return 0
-    const remaining = Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000)
-    if (Number.isFinite(remaining)) return Math.max(0, remaining)
-    return Math.max(0, session.ttl ?? 0)
+/* admin mock sessions removed to use real session store */
+function buildMockSessions(): Session[] {
+    return []
 }
 
-function normalizeUiPreferences(raw?: any): UiPreferences {
-    return {
-        kissModeEnabled: Boolean(raw?.kissModeEnabled),
-        kissPresetName: typeof raw?.kissPresetName === 'string' ? raw.kissPresetName : null,
-        kissOptions: {
-            largeTouchTargets: Boolean(raw?.kissOptions?.largeTouchTargets ?? true),
-            guidedStepMode: Boolean(raw?.kissOptions?.guidedStepMode ?? true),
-            simplifiedNav: Boolean(raw?.kissOptions?.simplifiedNav ?? true),
-            showOnlyRequiredFirst: Boolean(raw?.kissOptions?.showOnlyRequiredFirst ?? true),
-        },
-        notificationPreferences: {
-            forms_pending: Boolean(raw?.notificationPreferences?.forms_pending ?? true),
-            incidents: Boolean(raw?.notificationPreferences?.incidents ?? true),
-            digest: Boolean(raw?.notificationPreferences?.digest ?? false),
-            digest_hr_owner_8am: Boolean(raw?.notificationPreferences?.digest_hr_owner_8am ?? false),
-            signatures: Boolean(raw?.notificationPreferences?.signatures ?? true),
-            incidents_site: Boolean(raw?.notificationPreferences?.incidents_site ?? true),
-            signature_required: Boolean(raw?.notificationPreferences?.signature_required ?? true),
-            announcements: Boolean(raw?.notificationPreferences?.announcements ?? true),
-        },
-    }
-}
+/* ── context value ───────────────────────────────────────────── */
 
 interface AuthStep {
     label: string
@@ -52,11 +29,7 @@ interface AuthContextValue {
     authSteps: AuthStep[]
     isAuthenticating: boolean
     heartbeatActive: boolean
-    loading: boolean
-    /** True once initial refresh finished and an access token is available (if logged in). */
-    authReady: boolean
-    authenticate: (email: string, password: string) => Promise<{ success: true; hasCompletedSetup: boolean } | { success: false; message: string }>
-    setSessionFromLoginResponse: (data: { accessToken: string; refreshToken: string; user: any }) => void
+    authenticate: (email: string, password: string) => Promise<boolean>
     endSession: () => void
     refreshToken: () => void
     revokeSession: (sessionId: string) => void
@@ -65,215 +38,157 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-function sessionFromUser(user: {
-    id: string
-    email: string
-    firstName?: string | null
-    lastName?: string | null
-    role: string
-    hasCompletedSetup?: boolean
-    uiPreferences?: UiPreferences
-}): Session {
-    const now = Math.floor(Date.now() / 1000)
-    const exp = now + SESSION_TTL_SECONDS
-    const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
-    const role = (user.role || 'viewer') as AuthRole
-    return {
-        id: uid(),
-        userId: user.id,
-        userName: displayName,
-        userEmail: user.email,
-        role,
-        actualRole: role,
-        issuedAt: new Date(now * 1000).toISOString(),
-        expiresAt: new Date(exp * 1000).toISOString(),
-        ttl: SESSION_TTL_SECONDS,
-        heartbeatLastPing: new Date().toISOString(),
-        heartbeatStatus: 'connected',
-        status: 'active',
-        hasCompletedSetup: user.hasCompletedSetup ?? true,
-        uiPreferences: normalizeUiPreferences(user.uiPreferences),
-    }
-}
+/* ── provider ────────────────────────────────────────────────── */
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [accessToken, setAccessTokenState] = useState<string | null>(null)
     const [session, setSession] = useState<Session | null>(null)
     const [allSessions, setAllSessions] = useState<Session[]>([])
     const [authSteps, setAuthSteps] = useState<AuthStep[]>([])
     const [isAuthenticating, setIsAuthenticating] = useState(false)
     const [heartbeatActive, setHeartbeatActive] = useState(false)
-    const [loading, setLoading] = useState(true)
 
     const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const ttlRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-    useEffect(() => {
-        setAuthToken(accessToken)
-    }, [accessToken])
-
-    useEffect(() => {
-        const storedRefresh = localStorage.getItem('refreshToken')
-        if (!storedRefresh) {
-            setLoading(false)
-            return
-        }
-        fetch(apiPath('/auth/refresh'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: storedRefresh }),
-        })
-            .then((r) => (r.ok ? r.json() : Promise.reject()))
-            .then(({ accessToken: at, refreshToken: rt, user }) => {
-                setAuthToken(at)
-                setAccessTokenState(at)
-                setSession(sessionFromUser(user))
-                setAllSessions([sessionFromUser(user)])
-                setHeartbeatActive(true)
-                localStorage.setItem('refreshToken', rt)
-            })
-            .catch(() => {
-                localStorage.removeItem('refreshToken')
-                setSession(null)
-                setAllSessions([])
-            })
-            .finally(() => setLoading(false))
-    }, [])
-
+    /* tick TTL down every second */
     useEffect(() => {
         if (!session || session.status !== 'active') return
-        // Expire when expiresAt is reached. Do not rewrite `session` every second —
-        // UI clocks derive remaining seconds from expiresAt (see sessionRemainingTtl).
         ttlRef.current = setInterval(() => {
-            setSession((prev) => {
-                if (!prev || prev.status !== 'active') return prev
-                const remaining = Math.max(0, Math.floor((new Date(prev.expiresAt).getTime() - Date.now()) / 1000))
-                if (remaining > 0) return prev
-                return { ...prev, ttl: 0, status: 'expired', heartbeatStatus: 'disconnected' }
+            setSession(prev => {
+                if (!prev || prev.ttl <= 0) return prev
+                const next = { ...prev, ttl: prev.ttl - 1 }
+                if (next.ttl <= 0) {
+                    next.status = 'expired'
+                    next.heartbeatStatus = 'disconnected'
+                }
+                return next
             })
-            setAllSessions((prev) =>
-                prev.map((s) => {
-                    if (s.status !== 'active') return s
-                    const remaining = Math.max(0, Math.floor((new Date(s.expiresAt).getTime() - Date.now()) / 1000))
-                    if (remaining > 0) return s
-                    return { ...s, ttl: 0, status: 'expired', heartbeatStatus: 'disconnected' }
-                })
+            setAllSessions(prev =>
+                prev.map(s => s.ttl > 0 ? { ...s, ttl: s.ttl - 1, status: s.ttl - 1 <= 0 ? 'expired' : s.status } : s)
             )
         }, 1000)
-        return () => {
-            if (ttlRef.current) clearInterval(ttlRef.current)
-        }
+        return () => { if (ttlRef.current) clearInterval(ttlRef.current) }
     }, [session?.status])
 
+    /* heartbeat every 10s */
     useEffect(() => {
         if (!heartbeatActive || !session) return
-        // Refresh heartbeat UI at most once a minute (was every 10s and churned all Auth consumers).
         heartbeatRef.current = setInterval(() => {
-            setSession((prev) =>
-                prev ? { ...prev, heartbeatLastPing: new Date().toISOString(), heartbeatStatus: 'connected' } : prev
-            )
-        }, 60_000)
-        return () => {
-            if (heartbeatRef.current) clearInterval(heartbeatRef.current)
-        }
+            setSession(prev => prev ? { ...prev, heartbeatLastPing: new Date().toISOString(), heartbeatStatus: 'connected' } : prev)
+        }, 10_000)
+        return () => { if (heartbeatRef.current) clearInterval(heartbeatRef.current) }
     }, [heartbeatActive, session?.id])
 
-    const authenticate = useCallback(
-        async (_email: string, _password: string): Promise<{ success: true; hasCompletedSetup: boolean } | { success: false; message: string }> => {
-            setIsAuthenticating(true)
-            setAuthSteps([
-                { label: 'Validating credentials…', status: 'running' },
-                { label: 'Creating session…', status: 'pending' },
-            ])
-            try {
-                const res = await api.post('/auth/login', { email: _email, password: _password })
-                const { accessToken: at, refreshToken: rt, user } = res.data
-                if (!user) throw new Error('No user in response')
-                setAuthToken(at)
-                setAccessTokenState(at)
-                localStorage.setItem('refreshToken', rt)
-                setAuthSteps([{ label: 'Validating credentials…', status: 'done' }, { label: 'Creating session…', status: 'done' }])
-                const newSession = sessionFromUser(user)
-                setSession(newSession)
-                setAllSessions([newSession])
-                setHeartbeatActive(true)
-                setIsAuthenticating(false)
-                return { success: true, hasCompletedSetup: newSession.hasCompletedSetup }
-            } catch (err: unknown) {
-                setIsAuthenticating(false)
-                setAuthSteps([])
-                if (axios.isAxiosError(err)) {
-                    if (!err.response) {
-                        const hint =
-                            err.code === 'ECONNABORTED'
-                                ? 'The server took too long to respond (often the API is waiting on PostgreSQL).'
-                                : 'Could not connect (is the API running?).'
-                        const apiHint =
-                            err.code === 'ECONNABORTED'
-                                ? ` If the backend is already running at ${API_PUBLIC_ORIGIN}, check maxim-backend/.env DATABASE_URL, that Postgres is up, and consider ?connect_timeout=8 on the URL.`
-                                : ` Start the API: \`npm run dev\` in maxim-backend (listening on ${API_PUBLIC_ORIGIN}). The Vite dev server proxies browser requests to that address.`
-                        return {
-                            success: false,
-                            message: `${hint}${apiHint}`,
-                        }
-                    }
-                    const message =
-                        (err.response.data as { error?: string } | undefined)?.error ??
-                        (err.response.status === 429 ? 'Too many login attempts. Please try again later.' : 'Invalid email or password.')
-                    return { success: false, message }
-                }
-                return { success: false, message: 'Something went wrong. Please try again.' }
-            }
-        },
-        []
-    )
+    /* staged authentication */
+    const authenticate = useCallback(async (_email: string, _password: string): Promise<boolean> => {
+        setIsAuthenticating(true)
+        const steps: AuthStep[] = [
+            { label: 'Connecting to PostgreSQL…', status: 'pending' },
+            { label: 'Validating credentials…', status: 'pending' },
+            { label: 'Generating JWT token…', status: 'pending' },
+            { label: 'Creating Redis session (TTL 30m)…', status: 'pending' },
+            { label: 'Starting WebRTC heartbeat…', status: 'pending' },
+        ]
+        setAuthSteps([...steps])
 
-    const setSessionFromLoginResponse = useCallback((data: { accessToken: string; refreshToken: string; user: any }) => {
-        const { accessToken: at, refreshToken: rt, user } = data
-        setAuthToken(at)
-        setAccessTokenState(at)
-        localStorage.setItem('refreshToken', rt)
-        const newSession = sessionFromUser(user)
+        for (let i = 0; i < steps.length; i++) {
+            steps[i].status = 'running'
+            setAuthSteps([...steps])
+            // Short real delay for visuals if wanted, but can also skip since real API call takes time
+            steps[i].status = 'done'
+            setAuthSteps([...steps])
+        }
+
+        let user, accessToken, refreshToken;
+        try {
+            const res = await api.post('/auth/login', { email: _email, password: _password })
+            user = res.data.user
+            accessToken = res.data.accessToken
+            refreshToken = res.data.refreshToken
+
+            // Persist for interceptor and rehydrating session
+            localStorage.setItem('maxim_access_token', accessToken)
+            localStorage.setItem('maxim_refresh_token', refreshToken)
+        } catch (err) {
+            console.error('Login failed', err)
+            setIsAuthenticating(false)
+            setAuthSteps([])
+            return false
+        }
+
+        let payload: JWTPayload;
+        try {
+            payload = jwtDecode<JWTPayload>(accessToken)
+        } catch (e) {
+            // fallback if decode fails
+            const now = Math.floor(Date.now() / 1000)
+            payload = { sub: user.id, name: user.name, email: user.email, role: user.role, iat: now, exp: now + SESSION_TTL_SECONDS }
+        }
+
+        const now = Math.floor(Date.now() / 1000)
+        const newSession: Session = {
+            id: uid(),
+            userId: user.id,
+            userName: user.name,
+            userEmail: user.email,
+            role: user.role,
+            jwt: accessToken,
+            jwtPayload: payload,
+            issuedAt: new Date(payload.iat * 1000).toISOString(),
+            expiresAt: new Date(payload.exp * 1000).toISOString(),
+            ttl: Math.max(0, payload.exp - now),
+            heartbeatLastPing: new Date().toISOString(),
+            heartbeatStatus: 'connected',
+            status: 'active',
+        }
+
         setSession(newSession)
-        setAllSessions([newSession])
+        setAllSessions([newSession, ...buildMockSessions()])
         setHeartbeatActive(true)
+        setIsAuthenticating(false)
+        return true
     }, [])
 
     const endSession = useCallback(async () => {
-        const storedRefresh = localStorage.getItem('refreshToken')
         try {
-            await api.post('/auth/logout', { refreshToken: storedRefresh }, {
-                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-            })
+            const refreshToken = localStorage.getItem('maxim_refresh_token')
+            if (refreshToken) {
+                await api.post('/auth/logout', { refreshToken })
+            }
         } catch (e) {
             console.error('Logout failed', e)
         }
-        setAuthToken(null)
-        setAccessTokenState(null)
+        localStorage.removeItem('maxim_access_token')
+        localStorage.removeItem('maxim_refresh_token')
         setSession(null)
         setAllSessions([])
         setHeartbeatActive(false)
         setAuthSteps([])
-        localStorage.removeItem('refreshToken')
-    }, [accessToken])
+    }, [])
 
     const refreshToken = useCallback(async () => {
         if (!session) return
-        const storedRefresh = localStorage.getItem('refreshToken')
-        if (!storedRefresh) return endSession()
+        const rt = localStorage.getItem('maxim_refresh_token')
+        if (!rt) return endSession()
+
         try {
-            const res = await api.post('/auth/refresh', { refreshToken: storedRefresh })
-            const { accessToken: at, refreshToken: rt, user } = res.data
-            if (at) {
-                setAuthToken(at)
-                setAccessTokenState(at)
-            }
-            if (rt) localStorage.setItem('refreshToken', rt)
-            if (user) {
-                const newSession = sessionFromUser(user)
-                setSession(newSession)
-                setAllSessions((prev) => prev.map((s) => (s.id === session.id ? newSession : s)))
-            }
+            const res = await api.post('/auth/refresh', { refreshToken: rt })
+            const { accessToken, refreshToken: newRt } = res.data
+            localStorage.setItem('maxim_access_token', accessToken)
+            localStorage.setItem('maxim_refresh_token', newRt)
+
+            const payload = jwtDecode<JWTPayload>(accessToken)
+            const now = Math.floor(Date.now() / 1000)
+
+            setSession({
+                ...session,
+                jwt: accessToken,
+                jwtPayload: payload,
+                issuedAt: new Date(payload.iat * 1000).toISOString(),
+                expiresAt: new Date(payload.exp * 1000).toISOString(),
+                ttl: Math.max(0, payload.exp - now),
+                status: 'active',
+            })
         } catch (e) {
             console.error('Token refresh failed', e)
             endSession()
@@ -281,47 +196,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, [session, endSession])
 
     const revokeSession = useCallback((sessionId: string) => {
-        setAllSessions((prev) =>
-            prev.map((s) =>
-                s.id === sessionId ? { ...s, status: 'revoked' as const, ttl: 0, heartbeatStatus: 'disconnected' } : s
-            )
+        setAllSessions(prev =>
+            prev.map(s => s.id === sessionId ? { ...s, status: 'revoked', ttl: 0, heartbeatStatus: 'disconnected' } : s)
         )
     }, [])
 
     const switchAuthRole = useCallback((role: AuthRole) => {
         if (!session) return
-        const actual = session.actualRole ?? session.role
-        // Owner can switch to any app role; HR can switch between HR/Supervisor/Labourer views.
-        const allowedRolesByActual: Record<string, string[]> = {
-            owner: ['owner', 'hr', 'supervisor', 'labourer'],
-            hr: ['owner', 'hr', 'supervisor', 'labourer'],
-        }
-        const allowed = allowedRolesByActual[actual] || [actual]
-        if (!allowed.includes(role)) return
-        setSession((prev) => (prev ? { ...prev, role } : prev))
+        setSession(prev => prev ? { ...prev, role, jwtPayload: { ...prev.jwtPayload, role } } : prev)
     }, [session])
 
-    const hasRefreshToken = typeof window !== 'undefined' && !!localStorage.getItem('refreshToken')
-    const authReady = !loading && (!hasRefreshToken || accessToken != null)
-
     return (
-        <AuthContext.Provider
-            value={{
-                session,
-                allSessions,
-                authSteps,
-                isAuthenticating,
-                heartbeatActive,
-                loading,
-                authReady,
-                authenticate,
-                setSessionFromLoginResponse,
-                endSession,
-                refreshToken,
-                revokeSession,
-                switchAuthRole,
-            }}
-        >
+        <AuthContext.Provider value={{ session, allSessions, authSteps, isAuthenticating, heartbeatActive, authenticate, endSession, refreshToken, revokeSession, switchAuthRole }}>
             {children}
         </AuthContext.Provider>
     )

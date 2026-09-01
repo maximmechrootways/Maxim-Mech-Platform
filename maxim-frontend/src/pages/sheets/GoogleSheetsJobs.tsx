@@ -4,8 +4,10 @@ import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
+import { MOCK_JOB_ENTRIES } from '@/data/mock'
+
 export function GoogleSheetsJobs() {
-  const [jobs, setJobs] = useState<{ id: string; source: string; title: string; fields: Record<string, string>; status: string; emailId?: string }[]>([])
+  const [jobs, setJobs] = useState(MOCK_JOB_ENTRIES)
 
   const updateField = (jobId: string, key: string, value: string) => {
     setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, fields: { ...j.fields, [key]: value } } : j)))
@@ -22,17 +24,12 @@ export function GoogleSheetsJobs() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </Link>
         <div>
-          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Potential Jobs</h1>
+          <h1 className="font-display font-bold text-2xl text-neutral-900 dark:text-white">Potential jobs</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-0.5">Parsed from emails — edit, approve, or discard. Link to original email.</p>
         </div>
       </div>
 
-      {jobs.length === 0 ? (
-          <Card padding="lg" className="text-center text-neutral-500 dark:text-neutral-400">
-            <p>No job entries yet. Connect a spreadsheet and sync to see potential jobs from email.</p>
-          </Card>
-        ) : (
-        <ul className="space-y-4">
+      <ul className="space-y-4">
         {jobs.map((job) => (
           <li key={job.id}>
             <Card padding="lg">
@@ -62,7 +59,6 @@ export function GoogleSheetsJobs() {
           </li>
         ))}
       </ul>
-        )}
     </div>
   )
 }

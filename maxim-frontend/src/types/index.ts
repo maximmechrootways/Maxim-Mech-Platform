@@ -1,36 +1,11 @@
 export type UserRole = 'owner' | 'hr' | 'supervisor' | 'labourer'
 
-export interface KissOptions {
-  largeTouchTargets: boolean
-  guidedStepMode: boolean
-  simplifiedNav: boolean
-  showOnlyRequiredFirst: boolean
-}
-
-export interface NotificationPreferences {
-  forms_pending: boolean
-  incidents: boolean
-  digest: boolean
-  digest_hr_owner_8am: boolean
-  signatures: boolean
-  incidents_site: boolean
-  signature_required: boolean
-  announcements: boolean
-}
-
-export interface UiPreferences {
-  kissModeEnabled: boolean
-  kissPresetName: string | null
-  kissOptions: KissOptions
-  notificationPreferences?: NotificationPreferences
-}
-
 /* ── Phase 1: Authentication & Session Management ─────────────── */
 
 /** New role hierarchy for Phase 1 auth (viewer → editor → admin → owner) */
 export type AuthRole = 'viewer' | 'editor' | 'admin' | 'owner'
 
-/** Decoded JWT payload */
+/** Decoded JWT payload (mock) */
 export interface JWTPayload {
   sub: string
   name: string
@@ -40,27 +15,21 @@ export interface JWTPayload {
   exp: number
 }
 
-/** Session (cookie-based auth: no jwt in frontend; server uses HttpOnly cookies) */
+/** Session stored in Redis (mock) */
 export interface Session {
   id: string
   userId: string
   userName: string
   userEmail: string
-  /** Current view role (for routing/UI); owner can switch this. */
   role: AuthRole
-  /** Actual role from JWT; only owner can have role !== actualRole. Used so owner can switch back from labourer view. */
-  actualRole?: AuthRole
-  /** Not set when using HttpOnly cookie auth */
-  jwt?: string
-  jwtPayload?: JWTPayload
+  jwt: string
+  jwtPayload: JWTPayload
   issuedAt: string
   expiresAt: string
   ttl: number
   heartbeatLastPing: string
   heartbeatStatus: 'connected' | 'degraded' | 'disconnected'
   status: 'active' | 'expired' | 'revoked'
-  hasCompletedSetup: boolean
-  uiPreferences?: UiPreferences
 }
 
 /* ── End Phase 1 types ──────────────────────────────────────────── */
@@ -69,13 +38,9 @@ export interface User {
   id: string
   name: string
   email: string
-  /** Current view role (for routing/UI). */
   role: UserRole
-  /** Actual role from JWT; only owner has role !== actualRole. Enables owner to always switch back. */
-  actualRole?: UserRole
   avatar?: string
   active: boolean
-  uiPreferences?: UiPreferences
 }
 
 export interface NotificationItem {
@@ -227,8 +192,6 @@ export interface DocumentRecord {
   visibleToUserIds?: string[]
   /** Inline PDF data URL for viewing in the app without download (optional). */
   fileDataUrl?: string
-  /** URL or path pointing to the file stored in the backend */
-  filePath?: string
   /** When type is SOP: tags for filtering (site, role, hazard type) */
   tags?: string[]
   /** SOP acknowledgements: userId and date */
@@ -279,14 +242,14 @@ export interface ScannedPdfDocument {
   name: string
   uploadedAt: string
   uploadedBy: string
-  /** URL or blob id for the file */
+  /** URL or blob id for the file (mock: placeholder) */
   fileUrl?: string
 }
 
 /** A field HR places on a PDF form for the user to fill (text, date, or signature). Position as % of page (0–100). */
 export interface PlacedFormField {
   id: string
-  type: 'text' | 'date' | 'signature' | 'checkbox'
+  type: 'text' | 'date' | 'signature'
   label: string
   required?: boolean
   /** Page number (1-based). */
@@ -331,12 +294,6 @@ export interface DailyFormToComplete {
   assignedToUserId?: string
   /** Role that sees this instance when assignedToUserId is not set. */
   assignedToRole: UserRole
-  /** Which tab to show in (daily/monthly/yearly); from template or from supervisor assignment. */
-  schedule?: string
-  /** If this form was passed along, the field values from the previous person */
-  formDataSnapshot?: Record<string, string>
-  /** The assignment ID this was passed from */
-  passedFromId?: string
 }
 
 /** A submitted signable form: field values, signature, and geo-tagged */
@@ -345,8 +302,6 @@ export interface SignableFormSubmission {
   signableFormId: string
   templateName: string
   dailyFormId: string
-  /** User ID of who created/sent the form (supervisor for site_meeting) */
-  submittedById?: string
   submittedBy: string
   submittedAt: string
   /** Values for each placed field (field id -> value) */
@@ -361,68 +316,32 @@ export interface SignableFormSubmission {
   workflowType?: 'standard' | 'site_meeting'
   /** User IDs of labourers who must sign (site_meeting only) */
   siteSignerIds?: string[]
-  /** Signatures from labourers: userId, signedAt, optional signatureText (typed name) */
-  siteSignatures?: { userId: string; signedAt: string; signatureText?: string }[]
-  /** When all signers (including supervisor) have signed and form was sent to HR */
-  submittedToHrAt?: string
-  /** Display names for siteSignerIds (from API) */
-  siteSignerNames?: Record<string, string>
+  /** Signatures from labourers: userId and signedAt */
+  siteSignatures?: { userId: string; signedAt: string }[]
 }
 
 /** Subcontractor company — HR tracks company, contact, contract, insurance, and certs */
 export interface Subcontractor {
   id: string
   companyName: string
-  officeContactName: string
-  officeContactEmail: string
-  officeContactPhone?: string
-  siteContactName?: string
-  siteContactEmail?: string
-  siteContactPhone?: string
+  primaryContactName: string
+  primaryContactEmail: string
+  primaryContactPhone?: string
   status: 'active' | 'inactive'
-  compliance?: { score: number; status: string }
+  contractStart: string
+  contractEnd?: string
   notes?: string
-  /** Array of multiple insurance policies */
-  insurances?: {
-    id: string
-    type: string
-    policyNumber?: string
-    expiresAt?: string
-    filePath?: string
-    originalName?: string
-  }[]
-  /** WSIB Injury Summary Report */
-  wsibInjuryReportOptional?: boolean
-  /** WSIB Clearance (insurance) — when optional, excluded from compliance */
-  wsibClearanceOptional?: boolean
-  /** FORM 1000 — when optional, excluded from compliance */
-  form1000Optional?: boolean
-  wsibInjuryReportPath?: string
-  wsibInjuryReportOriginalName?: string
-  /** HR Safety Agreement */
-  hrSafetyAgreementPath?: string
-  hrSafetyAgreementOriginalName?: string
-  /** Health & Safety Manual */
-  usingMaximHSManual?: boolean
-  hsPdfFilePath?: string
-  hsPdfOriginalName?: string
-  /** FORM 1000 */
-  form1000Path?: string
-  form1000OriginalName?: string
+  /** Insurance (e.g. liability, WSIB); expiry triggers reminders */
+  insurancePolicyNumber?: string
+  insuranceExpiry?: string
+  /** Site orientation / safety induction completed */
+  orientationCompletedAt?: string
   /** When the subcontractor was last opened (for multi-HR awareness) */
   lastOpenedAt?: string
   lastOpenedBy?: string
   /** When the subcontractor was last edited and by whom */
   lastEditedAt?: string
   lastEditedBy?: string
-}
-
-/** Subcontractor detail data for HR view */
-export interface SubcontractorDetailData extends Omit<Subcontractor, 'lastOpenedAt' | 'lastOpenedBy' | 'lastEditedAt' | 'lastEditedBy' | 'notes'> {
-  contracts: SubcontractorContract[]
-  certifications: SubcontractorCertification[]
-  jobAssignments: SubcontractorJobAssignment[]
-  personnel: SubcontractorPersonnel[]
 }
 
 /** Certification held by a subcontractor (company-level or key person); expiration tracked */
@@ -433,9 +352,7 @@ export interface SubcontractorCertification {
   issuedAt: string
   expiresAt: string
   status: 'current' | 'expiring-soon' | 'expired'
-  /** Optional PDF for audit; filename and file path */
   fileName?: string
-  filePath?: string
 }
 
 /** Subcontractor assigned to a job/site */
@@ -447,57 +364,22 @@ export interface SubcontractorJobAssignment {
   assignedAt: string
 }
 
-/** Multiple uploaded contracts per subcontractor */
-export interface SubcontractorContract {
-  id: string
-  subcontractorId: string
-  personnelId?: string
-  startDate: string
-  endDate?: string
-  filePath: string
-  originalName: string
-  uploadedAt: string
-}
-
 /** Contractor worker (person) belonging to a subcontractor company; contractors do not log in */
 export interface SubcontractorPersonnel {
   id: string
   subcontractorId: string
   name: string
   email?: string
-  /** When true, shown as supervisor in contractor personnel list */
-  isSupervisor?: boolean
-  /** Personnel status: active, on-leave, inactive, terminated */
-  status?: 'active' | 'on-leave' | 'inactive' | 'terminated'
-  /** Company-level orientation location */
-  orientationLocation?: string
-  /** Company-level orientation completed at */
-  orientationCompletedAt?: string
 }
 
 /** Certification for an individual contractor worker */
 export interface SubcontractorPersonnelCertification {
   id: string
   personnelId: string
-  /** Set when present on API list payload; can be derived from `personnelId` + personnel parent */
-  subcontractorId?: string
   name: string
   issuedAt: string
   expiresAt: string
   status: 'current' | 'expiring-soon' | 'expired'
-  /** Optional PDF for audit; filename and file path */
-  fileName?: string
-  filePath?: string
-}
-
-/** Contractor worker document (e.g. contract) */
-export interface SubcontractorPersonnelDocument {
-  id: string
-  personnelId: string
-  name: string
-  category: string
-  filePath: string
-  uploadedAt: string
 }
 
 /** Contractor worker assigned to a specific job (which of their guys are on which job) */
@@ -506,7 +388,6 @@ export interface SubcontractorPersonnelJobAssignment {
   personnelId: string
   jobId: string
   assignedAt: string
-  orientationCompletedAt?: string
 }
 
 /** On-site check-in for a contractor worker (supervisor/HR marks who is on site) */
@@ -517,62 +398,6 @@ export interface SubcontractorPersonnelCheckIn {
   date: string
   checkedInAt: string | null
   checkedOutAt: string | null
-}
-
-/** Our employee — HR tracks licenses, contact, hiring, training, documents, time off */
-export interface Employee {
-  id: string
-  firstName: string
-  lastName: string
-  email: string
-  phone?: string
-  /** Employee date of birth (YYYY-MM-DD calendar day) */
-  birthday?: string
-  /** Emergency contact #1 name (optional) */
-  emergencyContact1Name?: string
-  /** Emergency contact #1 phone (optional) */
-  emergencyContact1Phone?: string
-  /** Relationship to employee (e.g. spouse, parent) */
-  emergencyContact1Relationship?: string
-  /** Emergency contact #2 name (optional) */
-  emergencyContact2Name?: string
-  /** Emergency contact #2 phone (optional) */
-  emergencyContact2Phone?: string
-  /** Relationship to employee for contact #2 */
-  emergencyContact2Relationship?: string
-  /** Additional emergency notes/conditions (optional) */
-  emergencyNotes?: string
-  jobTitle?: string
-  department?: string
-  hireDate: string
-  status: 'active' | 'on-leave' | 'terminated'
-  /** Role from API (owner | hr | supervisor | labourer) for list filtering */
-  role?: string
-  /** When status is on-leave: date they went on leave (ISO date string) */
-  onLeaveStartedAt?: string
-  /** When status is terminated: date of termination (ISO date string) */
-  terminatedAt?: string
-  /** Licenses and certificates (name, expiry) */
-  licenses?: { name: string; issuedAt?: string; expiresAt: string }[]
-  /** Training completed (name, completedAt) */
-  trainingCompleted?: { name: string; completedAt: string }[]
-  /** Hiring documents (name, uploadedAt) */
-  hiringDocuments?: { id: string; name: string; uploadedAt: string }[]
-  /** Job assignments for labourers */
-  jobAssignments?: { id: string; jobId: string; jobTitle?: string; siteName?: string }[]
-  /** Job assignments for supervisors */
-  jobSupervisorLinks?: { id: string; jobId: string; jobTitle?: string; siteName?: string }[]
-  /** Time off / vacation / sick */
-  timeOffEntries?: {
-    id: string
-    type: 'vacation' | 'time-off' | 'sick' | 'other'
-    startDate: string
-    endDate: string
-    notes?: string
-    compensation?: 'paid' | 'unpaid'
-  }[]
-  createdAt?: string
-  updatedAt?: string
 }
 
 /** Job/site assignment — created by Owner or HR; supervisor and labourers assigned */
@@ -730,11 +555,6 @@ export interface CorrectiveAction {
 }
 
 /** Safety alert / bulletin */
-export interface SafetyAlertUserAction {
-  userId: string
-  at: string
-}
-
 export interface SafetyAlert {
   id: string
   title: string
@@ -743,8 +563,7 @@ export interface SafetyAlert {
   roles?: UserRole[]
   publishedAt: string
   expiresAt?: string
-  acknowledgedBy?: SafetyAlertUserAction[]
-  readBy?: SafetyAlertUserAction[]
+  acknowledgedBy?: string[]
 }
 
 /** Emergency info per site/job */
@@ -766,19 +585,15 @@ export interface Certificate {
   /** Display name of the certificate holder */
   holderName: string
   holderUserId?: string
-  /** Optional issue date (YYYY-MM-DD) */
-  issueDate?: string
-  /** Expiration date (YYYY-MM-DD), optional */
-  expirationDate?: string
+  /** Expiration date (YYYY-MM-DD) */
+  expirationDate: string
   uploadedAt: string
   uploadedBy: string
   /** Optional file name */
   fileName?: string
-  /** Optional persisted backend file path (blob key) */
-  filePath?: string
   /** Data URL of the attached PDF (so it can be displayed and printed) */
   fileDataUrl?: string
-  /** When an expiration-reminder email was sent to HR */
+  /** When an expiration-reminder email was sent to HR (mock) */
   expirationReminderSentAt?: string
   /** Roles or job types this cert is required for (e.g. supervisor, first-aid) */
   requiredForRoles?: UserRole[]
@@ -838,8 +653,8 @@ export interface ComplianceCalendarEvent {
   metadata?: Record<string, string>
 }
 
-/** HR task/todo item for daily, weekly, monthly, or one-time planning */
-export type HRTodoRecurrence = 'daily' | 'weekly' | 'monthly' | 'once'
+/** HR task/todo item for daily, weekly, or monthly planning */
+export type HRTodoRecurrence = 'daily' | 'weekly' | 'monthly'
 
 export interface HRTodoItem {
   id: string

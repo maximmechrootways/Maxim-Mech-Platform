@@ -1,23 +1,21 @@
 import { prisma } from '../lib/prisma'
 import { z } from 'zod'
 import { documentQuerySchema } from '../schemas/documentSchemas'
-import { uploadBlob, deleteBlob } from './blobStorageService'
+import fs from 'fs'
 
 export const uploadDocumentRecord = async (
     userId: string,
     file: Express.Multer.File,
     docType: string
 ) => {
-    // Upload to Azure Blob Storage (deletes local file on success or failure)
-    const blobName = await uploadBlob(file.path, 'documents')
-
+    // Generate db entry
     const doc = await prisma.document.create({
         data: {
             originalName: file.originalname,
             filename: file.filename,
             mimeType: file.mimetype,
             sizeBytes: file.size,
-            filePath: blobName,
+            filePath: file.path,
             docType: docType,
             uploadedById: userId,
             status: 'uploaded'
@@ -96,9 +94,9 @@ export const deleteDocumentById = async (userId: string, docId: string) => {
     if (!doc) throw { status: 404, message: 'Document not found' }
     if (doc.uploadedById !== userId) throw { status: 403, message: 'Forbidden' }
 
-    // Delete blob from Azure Storage
-    if (doc.filePath) {
-        await deleteBlob(doc.filePath)
+    // Remote file disk cleanup
+    if (fs.existsSync(doc.filePath)) {
+        fs.unlinkSync(doc.filePath)
     }
 
     await prisma.document.delete({ where: { id: docId } })
