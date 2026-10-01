@@ -581,7 +581,7 @@ export function QualityFindingsPage() {
                             </button>
                           ) : null}
                           <Link
-                            to={`/forms/${r.sourceId}`}
+                            to={`/forms/${r.sourceId}?from=quality-findings`}
                             className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white opacity-90 transition-all hover:opacity-100 dark:bg-brand-500"
                           >
                             Open form
