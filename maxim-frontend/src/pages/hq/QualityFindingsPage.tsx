@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
-import { Link } from 'react-router-dom'
-import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { useEffect, useState, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
+import { Card, CardHeader, CardDescription } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import {
   fetchQualityFindings,
   fetchQualityFindingsSummary,
@@ -9,139 +9,150 @@ import {
   postDedupeQualityFindings,
   postSyncQualityFindingsFromCompletedForms,
   type QualityFindingListRow,
-} from '@/api/qualityFindings'
+} from "@/api/qualityFindings";
 
-const PAGE = 40
-const QF_SESSION_SYNC_KEY = 'maxim_qf_completed_sync_v1'
-const QF_QUEUE_TAB_KEY = 'maxim_qf_queue_tab'
+const PAGE = 40;
+const QF_SESSION_SYNC_KEY = "maxim_qf_completed_sync_v1";
+const QF_QUEUE_TAB_KEY = "maxim_qf_queue_tab";
 
-type QueueTab = 'open' | 'resolved' | 'all'
+type QueueTab = "open" | "resolved" | "all";
 
 function readStoredQueueTab(): QueueTab {
   try {
-    if (typeof window === 'undefined') return 'open'
-    const v = window.sessionStorage.getItem(QF_QUEUE_TAB_KEY)
-    if (v === 'open' || v === 'resolved' || v === 'all') return v
+    if (typeof window === "undefined") return "open";
+    const v = window.sessionStorage.getItem(QF_QUEUE_TAB_KEY);
+    if (v === "open" || v === "resolved" || v === "all") return v;
   } catch {
     /* private mode / blocked storage */
   }
-  return 'open'
+  return "open";
 }
 
 function formatSubmissionDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
+  if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   } catch {
-    return '—'
+    return "—";
   }
 }
 
 function ruleLabel(code: string): string {
-  if (code === 'checklist_substandard') return 'Substandard checklist'
-  return code.replace(/_/g, ' ')
+  if (code === "checklist_substandard") return "Substandard checklist";
+  return code.replace(/_/g, " ");
 }
 
 export function QualityFindingsPage() {
-  const [queueTab, setQueueTab] = useState<QueueTab>(() => readStoredQueueTab())
-  const [offset, setOffset] = useState(0)
-  const [rows, setRows] = useState<QualityFindingListRow[]>([])
-  const [total, setTotal] = useState(0)
+  const [queueTab, setQueueTab] = useState<QueueTab>(() =>
+    readStoredQueueTab(),
+  );
+  const [offset, setOffset] = useState(0);
+  const [rows, setRows] = useState<QualityFindingListRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<{
-    openCount: number
-    resolvedCount: number
-    byRule: Record<string, number>
-  } | null>(null)
-  const [initialHydrationDone, setInitialHydrationDone] = useState(false)
-  const [pullNonce, setPullNonce] = useState(0)
-  const [resolvingId, setResolvingId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [formNameInput, setFormNameInput] = useState('')
-  const [formName, setFormName] = useState('')
-  const formNameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const prevFormNameRef = useRef<string | undefined>(undefined)
-  const prevQueueTabRef = useRef<QueueTab | undefined>(undefined)
+    openCount: number;
+    resolvedCount: number;
+    byRule: Record<string, number>;
+  } | null>(null);
+  const [initialHydrationDone, setInitialHydrationDone] = useState(false);
+  const [pullNonce, setPullNonce] = useState(0);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [formNameInput, setFormNameInput] = useState("");
+  const [formName, setFormName] = useState("");
+  const formNameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const prevFormNameRef = useRef<string | undefined>(undefined);
+  const prevQueueTabRef = useRef<QueueTab | undefined>(undefined);
 
   useEffect(() => {
     try {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(QF_QUEUE_TAB_KEY, queueTab)
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(QF_QUEUE_TAB_KEY, queueTab);
       }
     } catch {
       /* ignore */
     }
-  }, [queueTab])
+  }, [queueTab]);
 
   useEffect(() => {
     if (prevQueueTabRef.current === undefined) {
-      prevQueueTabRef.current = queueTab
-      return
+      prevQueueTabRef.current = queueTab;
+      return;
     }
     if (prevQueueTabRef.current !== queueTab) {
-      prevQueueTabRef.current = queueTab
-      setOffset(0)
+      prevQueueTabRef.current = queueTab;
+      setOffset(0);
     }
-  }, [queueTab])
+  }, [queueTab]);
 
   useEffect(() => {
-    if (formNameDebounceRef.current) clearTimeout(formNameDebounceRef.current)
+    if (formNameDebounceRef.current) clearTimeout(formNameDebounceRef.current);
     formNameDebounceRef.current = setTimeout(() => {
-      formNameDebounceRef.current = null
-      setFormName(formNameInput.trim())
-    }, 350)
+      formNameDebounceRef.current = null;
+      setFormName(formNameInput.trim());
+    }, 350);
     return () => {
-      if (formNameDebounceRef.current) clearTimeout(formNameDebounceRef.current)
-    }
-  }, [formNameInput])
+      if (formNameDebounceRef.current)
+        clearTimeout(formNameDebounceRef.current);
+    };
+  }, [formNameInput]);
 
   useEffect(() => {
     if (prevFormNameRef.current === undefined) {
-      prevFormNameRef.current = formName
-      return
+      prevFormNameRef.current = formName;
+      return;
     }
     if (prevFormNameRef.current !== formName) {
-      prevFormNameRef.current = formName
-      setOffset(0)
+      prevFormNameRef.current = formName;
+      setOffset(0);
     }
-  }, [formName])
+  }, [formName]);
 
   useEffect(() => {
-    document.title = 'Form Red Flags — Maxim'
+    document.title = "Form Red Flags — Maxim";
     return () => {
-      document.title = 'Maxim Mechanical Group'
-    }
-  }, [])
+      document.title = "Maxim Mechanical Group";
+    };
+  }, []);
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
+    let cancelled = false;
+    (async () => {
       try {
-        await postDedupeQualityFindings()
+        await postDedupeQualityFindings();
         if (!sessionStorage.getItem(QF_SESSION_SYNC_KEY)) {
-          await postSyncQualityFindingsFromCompletedForms()
-          sessionStorage.setItem(QF_SESSION_SYNC_KEY, '1')
+          await postSyncQualityFindingsFromCompletedForms();
+          sessionStorage.setItem(QF_SESSION_SYNC_KEY, "1");
         }
       } catch {
         // Still load whatever is already stored
       } finally {
-        if (!cancelled) setInitialHydrationDone(true)
+        if (!cancelled) setInitialHydrationDone(true);
       }
-    })()
+    })();
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (!initialHydrationDone) return
-    fetchQualityFindingsSummary().then(setSummary).catch(() => setSummary(null))
-  }, [initialHydrationDone, pullNonce])
+    if (!initialHydrationDone) return;
+    fetchQualityFindingsSummary()
+      .then(setSummary)
+      .catch(() => setSummary(null));
+  }, [initialHydrationDone, pullNonce]);
 
   useEffect(() => {
-    if (!initialHydrationDone) return
-    setLoading(true)
-    setError(null)
+    if (!initialHydrationDone) return;
+    setLoading(true);
+    setError(null);
     fetchQualityFindings({
       queue: queueTab,
       limit: PAGE,
@@ -149,47 +160,51 @@ export function QualityFindingsPage() {
       formName: formName || undefined,
     })
       .then((r) => {
-        setRows(r.rows)
-        setTotal(r.total)
+        setRows(r.rows);
+        setTotal(r.total);
       })
       .catch((e) => {
-        setError(e?.response?.data?.error || 'Could not load Form Red Flags')
-        setRows([])
-        setTotal(0)
+        setError(e?.response?.data?.error || "Could not load Form Red Flags");
+        setRows([]);
+        setTotal(0);
       })
-      .finally(() => setLoading(false))
-  }, [initialHydrationDone, pullNonce, queueTab, offset, formName])
+      .finally(() => setLoading(false));
+  }, [initialHydrationDone, pullNonce, queueTab, offset, formName]);
 
   const pullFromCompletedForms = useCallback(async () => {
-    setError(null)
-    setLoading(true)
+    setError(null);
+    setLoading(true);
     try {
-      await postDedupeQualityFindings()
-      await postSyncQualityFindingsFromCompletedForms()
-      setPullNonce((n) => n + 1)
+      await postDedupeQualityFindings();
+      await postSyncQualityFindingsFromCompletedForms();
+      setPullNonce((n) => n + 1);
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } }
-      setError(err?.response?.data?.error || 'Could not pull from completed forms')
-      setLoading(false)
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(
+        err?.response?.data?.error || "Could not pull from completed forms",
+      );
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   const resolveFinding = useCallback(async (findingId: string) => {
-    setError(null)
-    setResolvingId(findingId)
+    setError(null);
+    setResolvingId(findingId);
     try {
-      await postAcknowledgeQualityFinding(findingId)
-      setQueueTab('resolved')
-      setPullNonce((n) => n + 1)
+      await postAcknowledgeQualityFinding(findingId);
+      setQueueTab("resolved");
+      setPullNonce((n) => n + 1);
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } }
-      setError(err?.response?.data?.error || 'Could not resolve this flag')
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err?.response?.data?.error || "Could not resolve this flag");
     } finally {
-      setResolvingId(null)
+      setResolvingId(null);
     }
-  }, [])
+  }, []);
 
-  const byRuleEntries = summary ? Object.entries(summary.byRule).sort((a, b) => b[1] - a[1]) : []
+  const byRuleEntries = summary
+    ? Object.entries(summary.byRule).sort((a, b) => b[1] - a[1])
+    : [];
 
   return (
     <div className="space-y-8 animate-fade-in pb-10">
@@ -214,19 +229,31 @@ export function QualityFindingsPage() {
               </span>
             </h1>
             <p className="text-base leading-relaxed text-neutral-600 dark:text-neutral-300">
-              Checklist answers that missed the standard on submitted PDFs—substandard picks, washroom &quot;No&quot;
-              rows, and similar signals—so you can open the form and follow up fast.
+              Checklist answers that missed the standard on submitted
+              PDFs—substandard picks, washroom &quot;No&quot; rows, and similar
+              signals—so you can open the form and follow up fast.
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-neutral-200/80 bg-white/60 px-4 py-3 text-sm text-neutral-600 backdrop-blur-sm dark:border-neutral-600/60 dark:bg-neutral-950/40 dark:text-neutral-300">
             <p>
-              <span className="font-medium text-neutral-800 dark:text-neutral-100">Tip:</span>
-              {' '}
-              Use <strong className="text-neutral-900 dark:text-white">Open only</strong> for items that still need
-              action; <strong className="text-neutral-900 dark:text-white">Resolved</strong> for flags you marked
-              reviewed; <strong className="text-neutral-900 dark:text-white">All</strong> for the full list. Narrow the
-              table with <strong className="text-neutral-900 dark:text-white">Filter by form name</strong> (title or
-              template).
+              <span className="font-medium text-neutral-800 dark:text-neutral-100">
+                Tip:
+              </span>{" "}
+              Use{" "}
+              <strong className="text-neutral-900 dark:text-white">
+                Open only
+              </strong>{" "}
+              for items that still need action;{" "}
+              <strong className="text-neutral-900 dark:text-white">
+                Resolved
+              </strong>{" "}
+              for flags you marked reviewed;{" "}
+              <strong className="text-neutral-900 dark:text-white">All</strong>{" "}
+              for the full list. Narrow the table with{" "}
+              <strong className="text-neutral-900 dark:text-white">
+                Filter by form name
+              </strong>{" "}
+              (title or template).
             </p>
             <button
               type="button"
@@ -246,9 +273,14 @@ export function QualityFindingsPage() {
             padding="md"
             className="relative overflow-hidden border-amber-200/80 shadow-soft dark:border-amber-500/30 dark:shadow-dark-soft"
           >
-            <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-amber-400 to-orange-500" aria-hidden />
+            <div
+              className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-amber-400 to-orange-500"
+              aria-hidden
+            />
             <div className="pl-3">
-              <CardHeader className="text-base text-neutral-800 dark:text-neutral-100">Open flags</CardHeader>
+              <CardHeader className="text-base text-neutral-800 dark:text-neutral-100">
+                Open Flags
+              </CardHeader>
               <CardDescription>Needs review (not resolved yet)</CardDescription>
               <p className="mt-4 text-5xl font-bold tabular-nums tracking-tight text-neutral-900 dark:text-white md:text-6xl">
                 {summary.openCount}
@@ -259,9 +291,14 @@ export function QualityFindingsPage() {
             padding="md"
             className="relative overflow-hidden border-emerald-200/80 shadow-soft dark:border-emerald-600/35 dark:shadow-dark-soft"
           >
-            <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-emerald-500 to-teal-600" aria-hidden />
+            <div
+              className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-emerald-500 to-teal-600"
+              aria-hidden
+            />
             <div className="pl-3">
-              <CardHeader className="text-base text-neutral-800 dark:text-neutral-100">Resolved</CardHeader>
+              <CardHeader className="text-base text-neutral-800 dark:text-neutral-100">
+                Resolved
+              </CardHeader>
               <CardDescription>Flags you marked as reviewed</CardDescription>
               <p className="mt-4 text-5xl font-bold tabular-nums tracking-tight text-neutral-900 dark:text-white md:text-6xl">
                 {summary.resolvedCount}
@@ -272,17 +309,25 @@ export function QualityFindingsPage() {
             padding="md"
             className="relative overflow-hidden border-neutral-200/90 sm:col-span-2 lg:col-span-1 dark:border-neutral-600/60 shadow-soft dark:shadow-dark-soft"
           >
-            <CardHeader className="text-base text-neutral-800 dark:text-neutral-100">By category</CardHeader>
-            <CardDescription>Open items grouped by detection rule</CardDescription>
+            <CardHeader className="text-base text-neutral-800 dark:text-neutral-100">
+              By Category
+            </CardHeader>
+            <CardDescription>
+              Open items grouped by detection rule
+            </CardDescription>
             <ul className="mt-4 flex flex-wrap gap-2">
               {byRuleEntries.length === 0 ? (
-                <li className="text-sm text-neutral-500 dark:text-neutral-400">All clear — no open flags.</li>
+                <li className="text-sm text-neutral-500 dark:text-neutral-400">
+                  All clear — no open flags.
+                </li>
               ) : (
                 byRuleEntries.map(([code, n]) => (
                   <li key={code}>
                     <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/60 bg-amber-50/90 px-3 py-1.5 text-xs font-medium text-amber-950 shadow-sm dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100">
                       <span className="font-semibold">{ruleLabel(code)}</span>
-                      <span className="tabular-nums text-amber-800 dark:text-amber-200">{n}</span>
+                      <span className="tabular-nums text-amber-800 dark:text-amber-200">
+                        {n}
+                      </span>
                     </span>
                   </li>
                 ))
@@ -292,11 +337,18 @@ export function QualityFindingsPage() {
         </div>
       )}
 
-      <Card padding="md" className="border-neutral-200/90 shadow-soft dark:border-neutral-700/70 dark:shadow-dark-soft">
+      <Card
+        padding="md"
+        className="border-neutral-200/90 shadow-soft dark:border-neutral-700/70 dark:shadow-dark-soft"
+      >
         <div className="mb-6 space-y-4">
           <div>
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Flagged items</h2>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Newest first · click a row to open the submission</p>
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              Flagged items
+            </h2>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              Newest first · click a row to open the submission
+            </p>
           </div>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-6">
             <label className="block min-w-0 flex-1 max-w-xl">
@@ -320,13 +372,13 @@ export function QualityFindingsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setOffset(0)
-                    setQueueTab('open')
+                    setOffset(0);
+                    setQueueTab("open");
                   }}
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    queueTab === 'open'
-                      ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white'
-                      : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white'
+                    queueTab === "open"
+                      ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white"
+                      : "text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                   }`}
                 >
                   Open only
@@ -334,13 +386,13 @@ export function QualityFindingsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setOffset(0)
-                    setQueueTab('resolved')
+                    setOffset(0);
+                    setQueueTab("resolved");
                   }}
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    queueTab === 'resolved'
-                      ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white'
-                      : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white'
+                    queueTab === "resolved"
+                      ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white"
+                      : "text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                   }`}
                 >
                   Resolved
@@ -348,13 +400,13 @@ export function QualityFindingsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setOffset(0)
-                    setQueueTab('all')
+                    setOffset(0);
+                    setQueueTab("all");
                   }}
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    queueTab === 'all'
-                      ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white'
-                      : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white'
+                    queueTab === "all"
+                      ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white"
+                      : "text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
                   }`}
                 >
                   All
@@ -375,27 +427,34 @@ export function QualityFindingsPage() {
               className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-600 dark:border-neutral-600 dark:border-t-brand-400"
               aria-hidden
             />
-            {!initialHydrationDone ? 'Scanning completed PDFs for checklist flags…' : 'Loading flags…'}
+            {!initialHydrationDone
+              ? "Scanning completed PDFs for checklist flags…"
+              : "Loading flags…"}
           </div>
         ) : rows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50/50 py-14 text-center dark:border-neutral-600 dark:bg-neutral-800/30">
             <p className="text-neutral-600 dark:text-neutral-300">
-              {queueTab === 'resolved'
-                ? 'No resolved flags yet.'
-                : queueTab === 'open'
-                  ? 'No open flags match this filter.'
-                  : 'No flags match this filter.'}
+              {queueTab === "resolved"
+                ? "No resolved flags yet."
+                : queueTab === "open"
+                  ? "No open flags match this filter."
+                  : "No flags match this filter."}
             </p>
             <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-              {queueTab === 'resolved' ? (
+              {queueTab === "resolved" ? (
                 <>
-                  When you click <strong className="text-neutral-700 dark:text-neutral-300">Resolve</strong> on an
-                  open flag, it moves here and leaves the Open only list.
+                  When you click{" "}
+                  <strong className="text-neutral-700 dark:text-neutral-300">
+                    Resolve
+                  </strong>{" "}
+                  on an open flag, it moves here and leaves the Open only list.
                 </>
               ) : (
                 <>
-                  Try clearing the form name filter, switching queue, using{' '}
-                  <strong className="text-neutral-700 dark:text-neutral-300">Pull substandards from completed forms</strong>
+                  Try clearing the form name filter, switching queue, using{" "}
+                  <strong className="text-neutral-700 dark:text-neutral-300">
+                    Pull substandards from completed forms
+                  </strong>
                   , or submit a form with a substandard checklist answer.
                 </>
               )}
@@ -426,36 +485,52 @@ export function QualityFindingsPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         {(() => {
-                          const templateName = (r.submissionTemplateName || r.templateNameSnapshot || '').trim()
-                          const submissionTitle = (r.submissionTitle || '').trim()
-                          const headline = templateName || submissionTitle || '—'
+                          const templateName = (
+                            r.submissionTemplateName ||
+                            r.templateNameSnapshot ||
+                            ""
+                          ).trim();
+                          const submissionTitle = (
+                            r.submissionTitle || ""
+                          ).trim();
+                          const headline =
+                            templateName || submissionTitle || "—";
                           const showSubmissionLine =
                             Boolean(templateName) &&
                             Boolean(submissionTitle) &&
-                            submissionTitle.toLowerCase() !== templateName.toLowerCase()
+                            submissionTitle.toLowerCase() !==
+                              templateName.toLowerCase();
                           return (
                             <>
-                              <div className="font-semibold text-neutral-900 dark:text-white">{headline}</div>
+                              <div className="font-semibold text-neutral-900 dark:text-white">
+                                {headline}
+                              </div>
                               {showSubmissionLine ? (
                                 <div className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">
                                   Submission title: {submissionTitle}
                                 </div>
                               ) : null}
                               <div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                                {r.submittedByDisplay || '—'}
+                                {r.submittedByDisplay || "—"}
                                 {r.linkedJobId ? (
-                                  <span className="ml-1 font-mono text-[11px] opacity-80" title={r.linkedJobId}>
+                                  <span
+                                    className="ml-1 font-mono text-[11px] opacity-80"
+                                    title={r.linkedJobId}
+                                  >
                                     · {r.linkedJobId}
                                   </span>
                                 ) : null}
                               </div>
                             </>
-                          )
+                          );
                         })()}
                       </td>
                       <td className="max-w-[min(280px,28vw)] px-4 py-3.5">
-                        <div className="truncate text-neutral-800 dark:text-neutral-200" title={r.fieldLabelSnapshot || ''}>
-                          {r.fieldLabelSnapshot || r.fieldId || '—'}
+                        <div
+                          className="truncate text-neutral-800 dark:text-neutral-200"
+                          title={r.fieldLabelSnapshot || ""}
+                        >
+                          {r.fieldLabelSnapshot || r.fieldId || "—"}
                         </div>
                         {r.valueSnapshot ? (
                           <div
@@ -473,8 +548,14 @@ export function QualityFindingsPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex flex-col items-start gap-1.5">
-                          <Badge variant={r.submissionStatus === 'APPROVED' ? 'default' : 'warning'}>
-                            {r.submissionStatus ?? '—'}
+                          <Badge
+                            variant={
+                              r.submissionStatus === "APPROVED"
+                                ? "default"
+                                : "warning"
+                            }
+                          >
+                            {r.submissionStatus ?? "—"}
                           </Badge>
                           {r.acknowledgedAt ? (
                             <span className="inline-flex rounded-md border border-emerald-300/70 bg-emerald-50/90 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-900 dark:border-emerald-600/50 dark:bg-emerald-950/50 dark:text-emerald-100">
@@ -496,7 +577,7 @@ export function QualityFindingsPage() {
                               onClick={() => void resolveFinding(r.id)}
                               className="inline-flex min-h-[36px] items-center justify-center rounded-lg border border-emerald-600/50 bg-emerald-600/15 px-3 py-1.5 text-xs font-semibold text-emerald-900 transition-colors hover:bg-emerald-600/25 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-500/50 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/50"
                             >
-                              {resolvingId === r.id ? 'Resolving…' : 'Resolve'}
+                              {resolvingId === r.id ? "Resolving…" : "Resolve"}
                             </button>
                           ) : null}
                           <Link
@@ -504,7 +585,12 @@ export function QualityFindingsPage() {
                             className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white opacity-90 transition-all hover:opacity-100 dark:bg-brand-500"
                           >
                             Open form
-                            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
+                            <span
+                              aria-hidden
+                              className="transition-transform group-hover:translate-x-0.5"
+                            >
+                              →
+                            </span>
                           </Link>
                         </div>
                       </td>
@@ -519,10 +605,14 @@ export function QualityFindingsPage() {
         {total > PAGE && (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-4 dark:border-neutral-800">
             <span className="text-sm text-neutral-500 dark:text-neutral-400">
-              Showing <span className="font-medium text-neutral-800 dark:text-neutral-200">{offset + 1}</span>
+              Showing{" "}
+              <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                {offset + 1}
+              </span>
               –
-              <span className="font-medium text-neutral-800 dark:text-neutral-200">{Math.min(offset + rows.length, total)}</span>
-              {' '}
+              <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                {Math.min(offset + rows.length, total)}
+              </span>{" "}
               of {total}
             </span>
             <div className="flex gap-2">
@@ -547,5 +637,5 @@ export function QualityFindingsPage() {
         )}
       </Card>
     </div>
-  )
+  );
 }

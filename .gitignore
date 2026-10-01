@@ -10,3 +10,6 @@ gx10-local-rag/desktop/dist-installer/
 __pycache__/
 *.pyc
 node_modules
+.env
+.env.local
+.azure-appsettings.json

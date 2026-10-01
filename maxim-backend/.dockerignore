@@ -1,0 +1,13 @@
+node_modules
+dist
+uploads
+.env
+.env.*
+*.log
+.git
+.DS_Store
+tsc_out.txt
+tsconfig.tsbuildinfo
+validate.err
+validate_output.txt
+test_results.txt
