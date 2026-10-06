@@ -10,19 +10,37 @@ function canManage(role: string) {
 
 function normalizeUserActions(raw: unknown): UserAction[] {
     if (!Array.isArray(raw)) return []
-    return raw
-        .map((item) => {
-            if (typeof item === 'string') return { userId: item, at: '' }
-            if (item && typeof item === 'object' && 'userId' in item) {
-                const o = item as { userId: string; at?: string }
-                return { userId: String(o.userId), at: o.at ?? '' }
-            }
-            return null
-        })
-        .filter((x): x is UserAction => x != null)
+    const seen = new Set<string>()
+    const out: UserAction[] = []
+    for (const item of raw) {
+        let action: UserAction | null = null
+        if (typeof item === 'string') action = { userId: item, at: '' }
+        else if (item && typeof item === 'object' && 'userId' in item) {
+            const o = item as { userId: string; at?: string }
+            action = { userId: String(o.userId), at: o.at ?? '' }
+        }
+        if (!action?.userId || seen.has(action.userId)) continue
+        seen.add(action.userId)
+        out.push(action)
+    }
+    return out
+}
+
+/** Ensure every acknowledged user also appears in readBy (fixes legacy ack-without-read rows). */
+function ensureReadCoversAcknowledgements(readBy: UserAction[], acknowledgedBy: UserAction[]): UserAction[] {
+    const read = [...readBy]
+    const readIds = new Set(read.map((r) => r.userId))
+    for (const a of acknowledgedBy) {
+        if (readIds.has(a.userId)) continue
+        read.push({ userId: a.userId, at: a.at || new Date().toISOString() })
+        readIds.add(a.userId)
+    }
+    return read
 }
 
 function map(r: any) {
+    const acknowledgedBy = normalizeUserActions(r.acknowledgedBy)
+    const readBy = ensureReadCoversAcknowledgements(normalizeUserActions(r.readBy), acknowledgedBy)
     return {
         id: r.id,
         title: r.title,
@@ -31,8 +49,8 @@ function map(r: any) {
         roles: Array.isArray(r.roles) ? r.roles : [],
         publishedAt: r.publishedAt?.toISOString?.() ?? undefined,
         expiresAt: r.expiresAt ?? undefined,
-        acknowledgedBy: normalizeUserActions(r.acknowledgedBy),
-        readBy: normalizeUserActions(r.readBy),
+        acknowledgedBy,
+        readBy,
     }
 }
 
@@ -97,11 +115,26 @@ export async function deleteAlert(id: string, role: string) {
 export async function markAlertRead(id: string, userId: string) {
     const r = await prisma.safetyAlert.findUnique({ where: { id } })
     if (!r) throw { status: 404, message: 'Alert not found' }
+    const ack = normalizeUserActions(r.acknowledgedBy)
     const read = normalizeUserActions(r.readBy)
-    if (read.some((x) => x.userId === userId)) return map(r)
+    if (read.some((x) => x.userId === userId)) {
+        const healedRead = ensureReadCoversAcknowledgements(read, ack)
+        if (healedRead.length !== read.length) {
+            const updated = await prisma.safetyAlert.update({
+                where: { id },
+                data: { readBy: healedRead, acknowledgedBy: ack },
+            })
+            return map(updated)
+        }
+        return map(r)
+    }
+    const readUpdated = ensureReadCoversAcknowledgements(
+        [...read, { userId, at: new Date().toISOString() }],
+        ack,
+    )
     const updated = await prisma.safetyAlert.update({
         where: { id },
-        data: { readBy: [...read, { userId, at: new Date().toISOString() }] },
+        data: { readBy: readUpdated, acknowledgedBy: ack },
     })
     return map(updated)
 }
@@ -110,15 +143,28 @@ export async function acknowledgeAlert(id: string, userId: string) {
     const r = await prisma.safetyAlert.findUnique({ where: { id } })
     if (!r) throw { status: 404, message: 'Alert not found' }
     const ack = normalizeUserActions(r.acknowledgedBy)
-    if (ack.some((x) => x.userId === userId)) return map(r)
     const read = normalizeUserActions(r.readBy)
-    const readUpdated = read.some((x) => x.userId === userId)
-        ? read
-        : [...read, { userId, at: new Date().toISOString() }]
+    if (ack.some((x) => x.userId === userId)) {
+        const healedRead = ensureReadCoversAcknowledgements(read, ack)
+        if (healedRead.length !== read.length) {
+            const updated = await prisma.safetyAlert.update({
+                where: { id },
+                data: { readBy: healedRead, acknowledgedBy: ack },
+            })
+            return map(updated)
+        }
+        return map(r)
+    }
+    const at = new Date().toISOString()
+    const ackUpdated = [...ack, { userId, at }]
+    const readUpdated = ensureReadCoversAcknowledgements(
+        read.some((x) => x.userId === userId) ? read : [...read, { userId, at }],
+        ackUpdated,
+    )
     const updated = await prisma.safetyAlert.update({
         where: { id },
         data: {
-            acknowledgedBy: [...ack, { userId, at: new Date().toISOString() }],
+            acknowledgedBy: ackUpdated,
             readBy: readUpdated,
         },
     })

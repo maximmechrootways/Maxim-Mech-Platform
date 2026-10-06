@@ -99,7 +99,7 @@ export function SafetyAlertsList() {
           <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Safety Alerts & Bulletins</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
             {isHr
-              ? 'Post alerts for sites and roles. Expand each alert to see who has read and acknowledged.'
+              ? 'Post alerts for sites and roles. Expand each alert to see who acknowledged, who read but has not acknowledged, and who is still outstanding.'
               : 'Important safety notices. Mark as read, then acknowledge to remove from your dashboard.'}
           </p>
         </div>
@@ -144,6 +144,7 @@ export function SafetyAlertsList() {
                 onRead={markAlertRead}
                 onAcknowledge={acknowledgeAlert}
                 lookupName={lookupName}
+                employees={employees}
               />
               {isHr && (
                 <div className="flex justify-end gap-2 -mt-1 mb-1">

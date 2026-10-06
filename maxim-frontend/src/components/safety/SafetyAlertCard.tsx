@@ -1,13 +1,13 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import type { SafetyAlert } from '@/types'
+import type { Employee, SafetyAlert } from '@/types'
 import {
   SAFETY_ALERT_RED_CARD,
   SAFETY_ALERT_RED_TEXT,
   SAFETY_ALERT_RED_TEXT_MUTED,
+  buildSafetyAlertTrackingBuckets,
   hasSafetyAlertAction,
-  normalizeSafetyAlertActions,
 } from '@/utils/safetyAlerts'
 
 type NameLookup = (userId: string) => string
@@ -19,6 +19,8 @@ interface SafetyAlertCardProps {
   onRead?: (id: string) => void | Promise<void>
   onAcknowledge?: (id: string) => void | Promise<void>
   lookupName?: NameLookup
+  /** Used to compute outstanding audience for HR tracking panel. */
+  employees?: Employee[]
   showActions?: boolean
   compact?: boolean
 }
@@ -30,14 +32,13 @@ export function SafetyAlertCard({
   onRead,
   onAcknowledge,
   lookupName,
+  employees = [],
   showActions = true,
   compact = false,
 }: SafetyAlertCardProps) {
   const [busy, setBusy] = useState<'read' | 'ack' | null>(null)
   const isRead = userId ? hasSafetyAlertAction(alert.readBy, userId) : false
   const isAcknowledged = userId ? hasSafetyAlertAction(alert.acknowledgedBy, userId) : false
-  const acknowledgements = normalizeSafetyAlertActions(alert.acknowledgedBy)
-  const reads = normalizeSafetyAlertActions(alert.readBy)
 
   const handleRead = async () => {
     if (!onRead || isRead) return
@@ -112,8 +113,8 @@ export function SafetyAlertCard({
 
       {isHr && (
         <AcknowledgementPanel
-          acknowledgements={acknowledgements}
-          reads={reads}
+          alert={alert}
+          employees={employees}
           lookupName={lookupName}
         />
       )}
@@ -122,37 +123,43 @@ export function SafetyAlertCard({
 }
 
 function AcknowledgementPanel({
-  acknowledgements,
-  reads,
+  alert,
+  employees,
   lookupName,
 }: {
-  acknowledgements: { userId: string; at: string }[]
-  reads: { userId: string; at: string }[]
+  alert: SafetyAlert
+  employees: Employee[]
   lookupName?: NameLookup
 }) {
   const [expanded, setExpanded] = useState(false)
   const name = lookupName ?? ((id: string) => id)
+  const buckets = useMemo(
+    () => buildSafetyAlertTrackingBuckets(alert, employees),
+    [alert, employees],
+  )
+  const { acknowledged, readPending, outstandingUserIds } = buckets
 
   return (
     <div className="mt-3 pt-3 border-t border-red-200/80 dark:border-red-800/80">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className={`text-sm font-medium ${SAFETY_ALERT_RED_TEXT} hover:underline`}
+        className={`text-sm font-medium ${SAFETY_ALERT_RED_TEXT} hover:underline text-left`}
       >
-        {acknowledgements.length} acknowledged · {reads.length} read
+        {acknowledged.length} acknowledged · {readPending.length} read (pending ack) ·{' '}
+        {outstandingUserIds.length} outstanding
         {expanded ? ' ▲' : ' ▼'}
       </button>
       {expanded && (
-        <div className="mt-2 space-y-2 text-sm">
+        <div className="mt-2 space-y-3 text-sm">
           <div>
-            <p className="font-medium text-neutral-700 dark:text-neutral-300">Acknowledged by</p>
-            {acknowledgements.length === 0 ? (
+            <p className="font-medium text-neutral-700 dark:text-neutral-300">Acknowledged</p>
+            {acknowledged.length === 0 ? (
               <p className="text-neutral-500">No acknowledgements yet.</p>
             ) : (
               <ul className="mt-1 space-y-1 text-neutral-600 dark:text-neutral-400">
-                {acknowledgements.map((a) => (
-                  <li key={`ack-${a.userId}-${a.at}`}>
+                {acknowledged.map((a) => (
+                  <li key={`ack-${a.userId}`}>
                     {name(a.userId)}
                     {a.at ? ` — ${new Date(a.at).toLocaleString()}` : ''}
                   </li>
@@ -161,16 +168,42 @@ function AcknowledgementPanel({
             )}
           </div>
           <div>
-            <p className="font-medium text-neutral-700 dark:text-neutral-300">Read by</p>
-            {reads.length === 0 ? (
-              <p className="text-neutral-500">No one has marked as read yet.</p>
+            <p className="font-medium text-neutral-700 dark:text-neutral-300">
+              Read (not yet acknowledged)
+            </p>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              People who marked as read but have not acknowledged — they leave this list once they acknowledge.
+            </p>
+            {readPending.length === 0 ? (
+              <p className="text-neutral-500 mt-1">No one is pending acknowledgement after reading.</p>
             ) : (
               <ul className="mt-1 space-y-1 text-neutral-600 dark:text-neutral-400">
-                {reads.map((r) => (
-                  <li key={`read-${r.userId}-${r.at}`}>
+                {readPending.map((r) => (
+                  <li key={`read-${r.userId}`}>
                     {name(r.userId)}
                     {r.at ? ` — ${new Date(r.at).toLocaleString()}` : ''}
                   </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <p className="font-medium text-neutral-700 dark:text-neutral-300">Outstanding</p>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Audience members who have not acknowledged yet
+              {alert.siteNames?.length ? ` (sites: ${alert.siteNames.join(', ')})` : ''}
+              {alert.roles?.length ? ` (roles: ${alert.roles.join(', ')})` : ''}.
+            </p>
+            {outstandingUserIds.length === 0 ? (
+              <p className="text-neutral-500 mt-1">
+                {employees.length === 0
+                  ? 'Employee list not loaded yet — refresh if this stays empty.'
+                  : 'No outstanding people — everyone in the audience has acknowledged.'}
+              </p>
+            ) : (
+              <ul className="mt-1 space-y-1 text-neutral-600 dark:text-neutral-400">
+                {outstandingUserIds.map((id) => (
+                  <li key={`out-${id}`}>{name(id)}</li>
                 ))}
               </ul>
             )}

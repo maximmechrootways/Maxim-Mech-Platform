@@ -1,4 +1,4 @@
-import type { SafetyAlert, SafetyAlertUserAction, UserRole } from '@/types'
+import type { Employee, SafetyAlert, SafetyAlertUserAction, UserRole } from '@/types'
 
 export function normalizeSafetyAlertActions(raw: SafetyAlertUserAction[] | string[] | undefined): SafetyAlertUserAction[] {
   if (!Array.isArray(raw)) return []
@@ -8,8 +8,65 @@ export function normalizeSafetyAlertActions(raw: SafetyAlertUserAction[] | strin
   })
 }
 
+/** Keep first action per userId (stable for display/counts). */
+export function uniqueSafetyAlertActions(raw: SafetyAlertUserAction[] | string[] | undefined): SafetyAlertUserAction[] {
+  const seen = new Set<string>()
+  const out: SafetyAlertUserAction[] = []
+  for (const a of normalizeSafetyAlertActions(raw)) {
+    if (!a.userId || seen.has(a.userId)) continue
+    seen.add(a.userId)
+    out.push(a)
+  }
+  return out
+}
+
 export function hasSafetyAlertAction(actions: SafetyAlertUserAction[] | string[] | undefined, userId: string): boolean {
-  return normalizeSafetyAlertActions(actions).some((a) => a.userId === userId)
+  return uniqueSafetyAlertActions(actions).some((a) => a.userId === userId)
+}
+
+export type SafetyAlertTrackingBuckets = {
+  acknowledged: SafetyAlertUserAction[]
+  /** Read but not yet acknowledged — removed from this list once they acknowledge. */
+  readPending: SafetyAlertUserAction[]
+  outstandingUserIds: string[]
+}
+
+function employeeMatchesAlertAudience(emp: Employee, alert: SafetyAlert): boolean {
+  if (emp.status === 'terminated') return false
+  if (alert.roles?.length) {
+    const role = emp.role as UserRole | undefined
+    if (!role || !alert.roles.includes(role)) return false
+  }
+  if (alert.siteNames?.length) {
+    const sites = new Set(
+      [
+        ...(emp.jobAssignments ?? []).map((a) => a.siteName),
+        ...(emp.jobSupervisorLinks ?? []).map((a) => a.siteName),
+      ]
+        .filter(Boolean)
+        .map((s) => String(s).trim().toLowerCase()),
+    )
+    const wanted = alert.siteNames.map((s) => s.trim().toLowerCase()).filter(Boolean)
+    if (!wanted.some((s) => sites.has(s))) return false
+  }
+  return true
+}
+
+/** Audience = active/on-leave employees matching optional role + site filters. */
+export function getSafetyAlertAudienceIds(alert: SafetyAlert, employees: Employee[]): string[] {
+  return employees.filter((e) => employeeMatchesAlertAudience(e, alert)).map((e) => e.id)
+}
+
+export function buildSafetyAlertTrackingBuckets(
+  alert: SafetyAlert,
+  employees: Employee[],
+): SafetyAlertTrackingBuckets {
+  const acknowledged = uniqueSafetyAlertActions(alert.acknowledgedBy)
+  const ackIds = new Set(acknowledged.map((a) => a.userId))
+  const readPending = uniqueSafetyAlertActions(alert.readBy).filter((r) => !ackIds.has(r.userId))
+  const audienceIds = getSafetyAlertAudienceIds(alert, employees)
+  const outstandingUserIds = audienceIds.filter((id) => !ackIds.has(id))
+  return { acknowledged, readPending, outstandingUserIds }
 }
 
 export function isAlertActiveForUser(
