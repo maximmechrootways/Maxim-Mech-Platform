@@ -6,13 +6,11 @@ import {
   fetchQualityFindings,
   fetchQualityFindingsSummary,
   postAcknowledgeQualityFinding,
-  postDedupeQualityFindings,
   postSyncQualityFindingsFromCompletedForms,
   type QualityFindingListRow,
 } from "@/api/qualityFindings";
 
 const PAGE = 40;
-const QF_SESSION_SYNC_KEY = "maxim_qf_completed_sync_v1";
 const QF_QUEUE_TAB_KEY = "maxim_qf_queue_tab";
 
 type QueueTab = "open" | "resolved" | "all";
@@ -58,8 +56,8 @@ export function QualityFindingsPage() {
     resolvedCount: number;
     byRule: Record<string, number>;
   } | null>(null);
-  const [initialHydrationDone, setInitialHydrationDone] = useState(false);
   const [pullNonce, setPullNonce] = useState(0);
+  const [pulling, setPulling] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,34 +121,12 @@ export function QualityFindingsPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        await postDedupeQualityFindings();
-        if (!sessionStorage.getItem(QF_SESSION_SYNC_KEY)) {
-          await postSyncQualityFindingsFromCompletedForms();
-          sessionStorage.setItem(QF_SESSION_SYNC_KEY, "1");
-        }
-      } catch {
-        // Still load whatever is already stored
-      } finally {
-        if (!cancelled) setInitialHydrationDone(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!initialHydrationDone) return;
     fetchQualityFindingsSummary()
       .then(setSummary)
       .catch(() => setSummary(null));
-  }, [initialHydrationDone, pullNonce]);
+  }, [pullNonce]);
 
   useEffect(() => {
-    if (!initialHydrationDone) return;
     setLoading(true);
     setError(null);
     fetchQualityFindings({
@@ -169,13 +145,14 @@ export function QualityFindingsPage() {
         setTotal(0);
       })
       .finally(() => setLoading(false));
-  }, [initialHydrationDone, pullNonce, queueTab, offset, formName]);
+  }, [pullNonce, queueTab, offset, formName]);
 
   const pullFromCompletedForms = useCallback(async () => {
     setError(null);
+    setPulling(true);
     setLoading(true);
     try {
-      await postDedupeQualityFindings();
+      // Full re-scan is opt-in only; findings are already updated on each form submit.
       await postSyncQualityFindingsFromCompletedForms();
       setPullNonce((n) => n + 1);
     } catch (e: unknown) {
@@ -184,6 +161,8 @@ export function QualityFindingsPage() {
         err?.response?.data?.error || "Could not pull from completed forms",
       );
       setLoading(false);
+    } finally {
+      setPulling(false);
     }
   }, []);
 
@@ -257,11 +236,13 @@ export function QualityFindingsPage() {
             </p>
             <button
               type="button"
-              disabled={loading || !initialHydrationDone}
+              disabled={loading || pulling}
               onClick={() => void pullFromCompletedForms()}
               className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-amber-400/60 bg-amber-500/15 px-4 text-sm font-semibold text-amber-950 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/50"
             >
-              Pull substandards from completed forms
+              {pulling
+                ? "Pulling from completed forms…"
+                : "Pull substandards from completed forms"}
             </button>
           </div>
         </div>
@@ -421,13 +402,13 @@ export function QualityFindingsPage() {
             {error}
           </p>
         )}
-        {loading || !initialHydrationDone ? (
+        {loading || pulling ? (
           <div className="flex items-center gap-3 py-12 text-neutral-500 dark:text-neutral-400">
             <span
               className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-600 dark:border-neutral-600 dark:border-t-brand-400"
               aria-hidden
             />
-            {!initialHydrationDone
+            {pulling
               ? "Scanning completed PDFs for checklist flags…"
               : "Loading flags…"}
           </div>

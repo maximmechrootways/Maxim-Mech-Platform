@@ -65,22 +65,33 @@ export async function runPdfQualityFindingDedupe(opts?: { submissionId?: string 
   `)
 }
 
+export type RecomputePdfFindingsOptions = {
+  /** When true, skip per-submission dedupe (bulk sync runs one global dedupe after). */
+  skipDedupe?: boolean
+}
+
 /**
  * Replaces all PDF-derived quality findings for this submission (hard delete + insert).
  * Safe to call on every submit/save; idempotent per current field values.
  */
-export async function recomputePdfSubmissionFindings(submissionId: string): Promise<void> {
+export async function recomputePdfSubmissionFindings(
+  submissionId: string,
+  opts?: RecomputePdfFindingsOptions,
+): Promise<void> {
   const prev = recomputeTailBySubmissionId.get(submissionId) ?? Promise.resolve()
   const job = prev
     .catch(() => {
       /* keep queue alive */
     })
-    .then(() => recomputePdfSubmissionFindingsCore(submissionId))
+    .then(() => recomputePdfSubmissionFindingsCore(submissionId, opts))
   recomputeTailBySubmissionId.set(submissionId, job)
   await job
 }
 
-async function recomputePdfSubmissionFindingsCore(submissionId: string): Promise<void> {
+async function recomputePdfSubmissionFindingsCore(
+  submissionId: string,
+  opts?: RecomputePdfFindingsOptions,
+): Promise<void> {
   const s = await prisma.pdfSubmission.findUnique({
     where: { id: submissionId },
     include: { template: { select: { id: true, name: true, fields: true } } },
@@ -117,5 +128,7 @@ async function recomputePdfSubmissionFindingsCore(submissionId: string): Promise
       })),
     })
   })
-  await runPdfQualityFindingDedupe({ submissionId })
+  if (!opts?.skipDedupe) {
+    await runPdfQualityFindingDedupe({ submissionId })
+  }
 }

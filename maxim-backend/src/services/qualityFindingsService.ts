@@ -258,6 +258,7 @@ export async function dedupeStoredPdfQualityFindings(): Promise<void> {
 /**
  * Re-runs PDF checklist detection for every completed (non-draft) submission so Form Red Flags
  * stays accurate without opening each form individually.
+ * Skips per-submission dedupe during the loop; one global dedupe runs at the end.
  */
 export async function syncQualityFindingsFromCompletedPdfSubmissions(): Promise<{
   processed: number
@@ -272,7 +273,9 @@ export async function syncQualityFindingsFromCompletedPdfSubmissions(): Promise<
   let failed = 0
   for (let i = 0; i < rows.length; i += batchSize) {
     const chunk = rows.slice(i, i + batchSize)
-    const settled = await Promise.allSettled(chunk.map(({ id }) => recomputePdfSubmissionFindings(id)))
+    const settled = await Promise.allSettled(
+      chunk.map(({ id }) => recomputePdfSubmissionFindings(id, { skipDedupe: true })),
+    )
     for (const r of settled) {
       if (r.status === 'rejected') failed += 1
     }
