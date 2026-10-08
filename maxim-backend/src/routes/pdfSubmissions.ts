@@ -3,6 +3,7 @@ import multer from 'multer'
 import { authenticate } from '../middleware/authenticate'
 import {
   listSubmissions,
+  getSubmissionStats,
   getSubmissionById,
   findOrCreateDraftSubmission,
   updateSubmissionStatus,
@@ -40,13 +41,25 @@ const uploadExtraPdfUpload = multer({
 
 router.get('/', async (req, res, next) => {
   try {
+    const limitRaw = req.query.limit != null ? Number(req.query.limit) : undefined
     const query = {
       submittedById: req.query.submittedById as string | undefined,
       titleSearch: req.query.titleSearch as string | undefined,
       status: req.query.status as string | undefined,
+      limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
     }
     const list = await listSubmissions(req.user!.id, req.user!.role, query)
     res.status(200).json(list)
+  } catch (e: any) {
+    if (e.status) return res.status(e.status).json({ error: e.message })
+    next(e)
+  }
+})
+
+router.get('/stats', async (req, res, next) => {
+  try {
+    const stats = await getSubmissionStats(req.user!.id, req.user!.role)
+    res.status(200).json(stats)
   } catch (e: any) {
     if (e.status) return res.status(e.status).json({ error: e.message })
     next(e)

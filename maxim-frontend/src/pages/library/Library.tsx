@@ -13,7 +13,7 @@ import { canUserAccessTemplate } from '@/utils/templateAccess'
 import { useFormSubmissions } from '@/contexts/FormSubmissionsContext'
 import { useSignableSubmissions } from '@/contexts/SignableSubmissionsContext'
 import { useSigning } from '@/contexts/SigningContext'
-import { fetchPdfTemplates, fetchPdfSubmissions, deletePdfTemplate, deleteDraftPdfSubmissions, exportMergedPdfSubmissions, fetchDailyFormsMyTeam, createFormAssignment, fetchFormAssignments, reviewFormAssignment, replaceLibraryDocumentFile, type PdfTemplateRecord, type PdfSubmissionRecord, type FormAssignmentRecord } from '@/api/library'
+import { fetchPdfTemplates, fetchPdfSubmissions, fetchPdfSubmissionStats, deletePdfTemplate, deleteDraftPdfSubmissions, exportMergedPdfSubmissions, fetchDailyFormsMyTeam, createFormAssignment, fetchFormAssignments, reviewFormAssignment, replaceLibraryDocumentFile, type PdfTemplateRecord, type PdfSubmissionRecord, type PdfSubmissionStats, type FormAssignmentRecord } from '@/api/library'
 import { listDailyHazardSubmissions, type DailyHazardSubmissionSummary } from '@/api/dailyHazardAnalysis'
 import { fetchNearMisses, type NearMissRecord } from '@/api/nearMisses'
 import { downloadBlob } from '@/utils/fileActions'
@@ -457,6 +457,7 @@ export function Library() {
   const [pdfTemplates, setPdfTemplates] = useState<PdfTemplateRecord[]>([])
   const [pdfSubmissions, setPdfSubmissions] = useState<PdfSubmissionRecord[]>([])
   const [dashboardPdfSubmissions, setDashboardPdfSubmissions] = useState<PdfSubmissionRecord[]>([])
+  const [submissionStats, setSubmissionStats] = useState<PdfSubmissionStats | null>(null)
   const [dailyHazardSubmissions, setDailyHazardSubmissions] = useState<DailyHazardSubmissionSummary[]>([])
   const [nearMissSubmissions, setNearMissSubmissions] = useState<NearMissRecord[]>([])
   const [pendingSignatureSubmissions, setPendingSignatureSubmissions] = useState<PdfSubmissionRecord[]>([])
@@ -486,37 +487,15 @@ export function Library() {
     const statusMap: Record<string, string> = {
       all: '',
       draft: 'DRAFT',
-      submitted: 'SUBMITTED',
+      submitted: 'SUBMITTED,AWAITING_SIGNATURES',
       approved: 'APPROVED',
       rejected: 'REJECTED',
       archived: 'ARCHIVED',
       pending_site_signatures: 'AWAITING_SIGNATURES',
       resubmit_required: 'RESUBMIT_REQUIRED',
     }
-    const status = statusMap[submissionFilter] ?? 'SUBMITTED'
-    const paramsBase = { submittedById: submittedByFilter || undefined }
-
-    // "Pending approval" must include forms sent for worker signatures (AWAITING_SIGNATURES), not only SUBMITTED.
-    if (submissionFilter === 'submitted') {
-      Promise.all([
-        fetchPdfSubmissions({ status: 'SUBMITTED', ...paramsBase }),
-        fetchPdfSubmissions({ status: 'AWAITING_SIGNATURES', ...paramsBase }),
-      ])
-        .then(([submittedRows, awaitingRows]) => {
-          const byId = new Map<string, (typeof submittedRows)[number]>()
-          for (const s of submittedRows) byId.set(s.id, s)
-          for (const s of awaitingRows) byId.set(s.id, s)
-          const merged = Array.from(byId.values()).sort((a, b) => {
-            const ta = new Date(a.submittedAt ?? a.createdAt ?? 0).getTime()
-            const tb = new Date(b.submittedAt ?? b.createdAt ?? 0).getTime()
-            return tb - ta
-          })
-          setPdfSubmissions(merged)
-        })
-        .catch(() => setPdfSubmissions([]))
-        .finally(() => setLoadingSubmissions(false))
-      return
-    }
+    const status = statusMap[submissionFilter] ?? 'SUBMITTED,AWAITING_SIGNATURES'
+    const paramsBase = { submittedById: submittedByFilter || undefined, limit: 300 }
 
     fetchPdfSubmissions({
       status: status || undefined,
@@ -537,28 +516,43 @@ export function Library() {
       .catch(() => setNearMissSubmissions([]))
   }, [])
   const loadDashboardPdfSubmissions = useCallback(() => {
-    // Dashboard cards should reflect the true queue across all statuses,
-    // independent of the submissions table status dropdown.
-    fetchPdfSubmissions()
-      .then((rows) => setDashboardPdfSubmissions(Array.isArray(rows) ? rows : []))
-      .catch(() => setDashboardPdfSubmissions([]))
+    // Lightweight queue for cards: only statuses the dashboard surfaces, capped.
+    // Counts come from /stats so we do not need an unbounded full-table fetch.
+    Promise.all([
+      fetchPdfSubmissions({
+        status: 'SUBMITTED,AWAITING_SIGNATURES,RESUBMIT_REQUIRED',
+        limit: 100,
+      }),
+      fetchPdfSubmissionStats().catch(() => null),
+    ])
+      .then(([rows, stats]) => {
+        setDashboardPdfSubmissions(Array.isArray(rows) ? rows : [])
+        if (stats) setSubmissionStats(stats)
+      })
+      .catch(() => {
+        setDashboardPdfSubmissions([])
+        setSubmissionStats(null)
+      })
   }, [])
 
   useEffect(() => {
+    // Templates are unused on the Completed Forms (submissions) view — skip the fetch.
+    if (view === 'submissions') return
     loadPdfTemplates()
-  }, [loadPdfTemplates])
+  }, [view, loadPdfTemplates])
   useEffect(() => {
     loadPdfSubmissions()
   }, [loadPdfSubmissions, submissionFilter, submittedByFilter])
   useEffect(() => {
     if (view !== 'submissions') return
+    loadDashboardPdfSubmissions()
+    // DHA list is now summary-sized (no signature blobs); still needed for table + awaiting card.
     loadDailyHazardSubmissions()
     loadNearMissSubmissions()
-    loadDashboardPdfSubmissions()
   }, [view, loadDailyHazardSubmissions, loadNearMissSubmissions, loadDashboardPdfSubmissions])
   useEffect(() => {
     if (view !== 'signing') return
-    fetchPdfSubmissions({ status: 'AWAITING_SIGNATURES' })
+    fetchPdfSubmissions({ status: 'AWAITING_SIGNATURES', limit: 200 })
       .then(setPendingSignatureSubmissions)
       .catch(() => setPendingSignatureSubmissions([]))
   }, [view])
@@ -1493,7 +1487,15 @@ export function Library() {
                         <span className="text-neutral-500 shrink-0">{row.who}</span>
                       </li>
                     ))}
-                    {outstandingRows.length > 10 && <li className="text-xs text-neutral-500">+{outstandingRows.length - 10} more</li>}
+                    {outstandingRows.length > 10 && (
+                      <li className="text-xs text-neutral-500">
+                        +{Math.max(
+                          outstandingRows.length - 10,
+                          (submissionStats?.resubmitRequired ?? 0) - 10
+                        )}{' '}
+                        more
+                      </li>
+                    )}
                   </ul>
                 </Card>
                 <Card padding="md" className="border-brand-200 dark:border-brand-800">
@@ -1506,7 +1508,15 @@ export function Library() {
                         <span className="text-neutral-500 shrink-0">{row.submitter}</span>
                       </li>
                     ))}
-                    {awaitingApprovalRows.length > 10 && <li className="text-xs text-neutral-500">+{awaitingApprovalRows.length - 10} more</li>}
+                    {awaitingApprovalRows.length > 10 && (
+                      <li className="text-xs text-neutral-500">
+                        +{Math.max(
+                          awaitingApprovalRows.length - 10,
+                          (submissionStats?.awaitingApproval ?? 0) - 10
+                        )}{' '}
+                        more
+                      </li>
+                    )}
                   </ul>
                 </Card>
               </div>

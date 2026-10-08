@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { recomputePdfSubmissionFindings } from './qualityFindings/recomputePdfSubmissionFindings'
 import * as jobService from './jobService'
 import * as notificationService from './notificationService'
@@ -488,32 +488,6 @@ function extractLinkedJobLabel(fieldValues: Record<string, unknown> | null | und
   return undefined
 }
 
-function extractJobSiteTextFromFields(
-  fieldValues: Record<string, unknown> | null | undefined,
-  templateFields: Array<{ id: string; label?: string }> | undefined
-): string | undefined {
-  if (!fieldValues || !Array.isArray(templateFields) || templateFields.length === 0) return undefined
-  const isJobSiteLike = (label?: string) => {
-    const normalized = String(label ?? '').toLowerCase().trim()
-    if (!normalized) return false
-    return (
-      normalized.includes('job site') ||
-      normalized === 'project' ||
-      normalized.includes('project') ||
-      normalized.includes('project/site') ||
-      normalized.includes('site') ||
-      normalized.includes('location') ||
-      normalized.includes('shop')
-    )
-  }
-  const field = templateFields.find((f) => isJobSiteLike(f.label))
-  if (!field?.id) return undefined
-  const raw = fieldValues[field.id]
-  if (typeof raw !== 'string') return undefined
-  const value = raw.trim()
-  return value || undefined
-}
-
 function displayNameFromUser(u: { firstName: string; lastName: string } | null) {
   if (!u) return undefined
   return { displayName: `${u.firstName} ${u.lastName}`.trim() }
@@ -646,59 +620,138 @@ async function assertCanAccessSubmission(submissionId: string, userId: string, u
   return s
 }
 
-export async function listSubmissions(
+function parseStatusFilter(status?: string): string[] {
+  if (!status?.trim()) return []
+  return [
+    ...new Set(
+      status
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+    ),
+  ]
+}
+
+function buildListWhere(
   userId: string,
   userRole: string,
-  query?: { submittedById?: string; titleSearch?: string; status?: string }
-) {
+  query?: { submittedById?: string; status?: string },
+  labourerIds?: string[]
+): Prisma.PdfSubmissionWhereInput {
   const where: Prisma.PdfSubmissionWhereInput = {}
+  const statuses = parseStatusFilter(query?.status)
+
   if (isOwnerOrHr(userRole)) {
     if (query?.submittedById) where.submittedById = query.submittedById
-    if (query?.status) where.status = query.status as Prisma.EnumSubmissionStatusFilter
   } else if (userRole === 'supervisor') {
-    const labourerIds = await jobService.getLabourerIdsSupervisedBy(userId)
-    // Supervisors must see their own drafts/submissions (e.g. toolbox talks) plus team + anything they must sign.
     const orConditions: Prisma.PdfSubmissionWhereInput[] = [
       { submittedById: userId },
       { signers: { some: { labourerUserId: userId } } },
     ]
-    if (labourerIds.length > 0) {
+    if (labourerIds && labourerIds.length > 0) {
       orConditions.push({ submittedById: { in: labourerIds } })
     }
     where.OR = orConditions
-    if (query?.status) where.status = query.status as Prisma.EnumSubmissionStatusFilter
   } else {
     where.OR = [{ submittedById: userId }, { signers: { some: { labourerUserId: userId } } }]
-    if (query?.status) where.status = query.status as Prisma.EnumSubmissionStatusFilter
   }
+
+  if (statuses.length === 1) {
+    where.status = statuses[0] as Prisma.EnumSubmissionStatusFilter
+  } else if (statuses.length > 1) {
+    where.status = { in: statuses as Prisma.EnumSubmissionStatusFilter[] }
+  }
+
+  return where
+}
+
+const DEFAULT_LIST_LIMIT = 300
+const MAX_LIST_LIMIT = 1000
+
+export async function listSubmissions(
+  userId: string,
+  userRole: string,
+  query?: { submittedById?: string; titleSearch?: string; status?: string; limit?: number }
+) {
+  const labourerIds =
+    userRole === 'supervisor' ? await jobService.getLabourerIdsSupervisedBy(userId) : undefined
+  const where = buildListWhere(userId, userRole, query, labourerIds)
+  const statuses = parseStatusFilter(query?.status)
+  const includesDraft = statuses.length === 0 || statuses.includes('DRAFT')
+  const take = Math.min(
+    Math.max(1, Number(query?.limit) || DEFAULT_LIST_LIMIT),
+    MAX_LIST_LIMIT
+  )
+
+  // Narrow select: never pull template.fields or signer image blobs on list.
+  // fieldValues (with base64 signatures) is loaded separately and stripped in SQL.
   const list = await prisma.pdfSubmission.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    include: {
-      template: {
-        select: {
-          id: true,
-          name: true,
-          pageCount: true,
-          fields: { select: { id: true, label: true } },
-        },
-      },
+    take,
+    select: {
+      id: true,
+      templateId: true,
+      title: true,
+      status: true,
+      submittedById: true,
+      submittedAt: true,
+      createdAt: true,
+      resubmissionReason: true,
+      resubmissionRequestedAt: true,
+      resubmittedAt: true,
+      extraPdfBlobPath: true,
+      template: { select: { id: true, name: true, pageCount: true } },
       signers: { select: { labourerUserId: true, signatureStatus: true } },
     },
   })
+
   type Row = (typeof list)[number]
+  if (list.length === 0) return []
+
+  const ids = list.map((s) => s.id)
+  const slimRows = await prisma.$queryRaw<
+    Array<{ id: string; fieldValues: unknown; hasSignatures: boolean }>
+  >`
+    SELECT
+      id,
+      ("fieldValues" - '__signatures__') AS "fieldValues",
+      CASE
+        WHEN jsonb_typeof("fieldValues"->'__signatures__') = 'array'
+          AND jsonb_array_length("fieldValues"->'__signatures__') > 0
+        THEN true
+        ELSE false
+      END AS "hasSignatures"
+    FROM "PdfSubmission"
+    WHERE id IN (${Prisma.join(ids)})
+  `
+  const slimById = new Map(
+    slimRows.map((r) => [
+      r.id,
+      {
+        fieldValues: (r.fieldValues as Record<string, unknown>) || {},
+        hasSignatures: Boolean(r.hasSignatures),
+      },
+    ])
+  )
+
   let filtered = list
-  // Empty drafts should not appear in submissions. A draft is shown only once user
-  // has entered real content (beyond internal metadata like linked job id).
-  filtered = filtered.filter((s) => {
-    if (s.status !== 'DRAFT') return true
-    return hasMeaningfulDraftContent(
-      s.fieldValues as Record<string, unknown>,
-      s.title,
-      (s as any).extraPdfBlobPath ?? null,
-      s.template.name
-    )
-  })
+  if (includesDraft) {
+    // Empty drafts should not appear. Signatures were stripped from JSON; use hasSignatures flag.
+    filtered = filtered.filter((s) => {
+      if (s.status !== 'DRAFT') return true
+      const slim = slimById.get(s.id)
+      const fieldValues = { ...(slim?.fieldValues ?? {}) }
+      if (slim?.hasSignatures) fieldValues.__signatures__ = [{ stub: true }]
+      return hasMeaningfulDraftContent(
+        fieldValues,
+        s.title,
+        s.extraPdfBlobPath ?? null,
+        s.template.name
+      )
+    })
+  }
+
   if (isOwnerOrHr(userRole) && query?.titleSearch?.trim()) {
     const q = query.titleSearch.trim().toLowerCase()
     filtered = filtered.filter((s: Row) => {
@@ -706,6 +759,7 @@ export async function listSubmissions(
       return title.toLowerCase().includes(q) || s.template.name.toLowerCase().includes(q)
     })
   }
+
   const userIds = [...new Set(filtered.map((s) => s.submittedById).filter(Boolean))] as string[]
   const users =
     userIds.length > 0
@@ -719,7 +773,7 @@ export async function listSubmissions(
   const linkedJobIds = [
     ...new Set(
       filtered
-        .map((s) => extractLinkedJobId(s.fieldValues as Record<string, unknown>))
+        .map((s) => extractLinkedJobId(slimById.get(s.id)?.fieldValues))
         .filter(Boolean)
     ),
   ] as string[]
@@ -735,15 +789,24 @@ export async function listSubmissions(
   const unresolvedJobLabels = [
     ...new Set(
       filtered
-        .filter((s) => !extractLinkedJobId(s.fieldValues as Record<string, unknown>))
-        .map((s) => extractLinkedJobLabel(s.fieldValues as Record<string, unknown>))
+        .filter((s) => !extractLinkedJobId(slimById.get(s.id)?.fieldValues))
+        .map((s) => extractLinkedJobLabel(slimById.get(s.id)?.fieldValues))
         .filter(Boolean)
     ),
   ] as string[]
 
+  // Prefer title-scoped lookup over loading the entire jobs table.
+  const fallbackTitles = [
+    ...new Set(
+      unresolvedJobLabels
+        .map((label) => String(label).split(' · ')[0]?.trim())
+        .filter(Boolean)
+    ),
+  ]
   const fallbackJobs =
-    unresolvedJobLabels.length > 0
+    fallbackTitles.length > 0
       ? await prisma.job.findMany({
+          where: { title: { in: fallbackTitles } },
           select: { id: true, title: true, site: { select: { name: true } } },
         })
       : []
@@ -752,12 +815,16 @@ export async function listSubmissions(
   )
 
   return filtered.map((s: Row) => {
-    const fieldValues = s.fieldValues as Record<string, unknown>
+    const fieldValues = slimById.get(s.id)?.fieldValues ?? {}
     const jid = extractLinkedJobId(fieldValues)
     const label = extractLinkedJobLabel(fieldValues)
-    const siteLikeText = extractJobSiteTextFromFields(fieldValues, (s.template as any).fields ?? [])
     const fallbackJob = !jid && label ? fallbackJobLabelMap[String(label).toLowerCase()] : undefined
     const j = jid ? jobMap[jid] : fallbackJob
+    // Site-like text without template.fields: use job label site segment when present.
+    const siteFromLabel =
+      typeof label === 'string' && label.includes(' · ')
+        ? label.split(' · ').slice(1).join(' · ').trim() || undefined
+        : undefined
     return {
       id: s.id,
       templateId: s.templateId,
@@ -773,13 +840,37 @@ export async function listSubmissions(
       pendingSignatureCount: s.signers.filter((sig) => sig.signatureStatus !== 'signed').length,
       jobId: jid ?? fallbackJob?.id,
       jobTitle: j?.title,
-      jobSiteName: j?.site?.name ?? siteLikeText,
+      jobSiteName: j?.site?.name ?? siteFromLabel,
       resubmissionReason: s.resubmissionReason ?? undefined,
       resubmissionRequestedAt: s.resubmissionRequestedAt?.toISOString(),
       resubmittedAt: s.resubmittedAt?.toISOString(),
       userSavedDraft: isExplicitUserSavedDhaDraft(fieldValues, s.template.name),
     }
   })
+}
+
+/** Lightweight counts by status for dashboard cards — avoids fetching full submission rows. */
+export async function getSubmissionStats(userId: string, userRole: string) {
+  const labourerIds =
+    userRole === 'supervisor' ? await jobService.getLabourerIdsSupervisedBy(userId) : undefined
+  const where = buildListWhere(userId, userRole, undefined, labourerIds)
+  const grouped = await prisma.pdfSubmission.groupBy({
+    by: ['status'],
+    where,
+    _count: { _all: true },
+  })
+  const byStatus: Record<string, number> = {}
+  let total = 0
+  for (const row of grouped) {
+    byStatus[row.status] = row._count._all
+    total += row._count._all
+  }
+  return {
+    total,
+    byStatus,
+    awaitingApproval: (byStatus.SUBMITTED ?? 0) + (byStatus.AWAITING_SIGNATURES ?? 0),
+    resubmitRequired: byStatus.RESUBMIT_REQUIRED ?? 0,
+  }
 }
 
 export async function exportMergedSubmissionsPdf(
@@ -917,7 +1008,15 @@ export async function getSubmissionById(id: string, userId: string, userRole: st
     where: { id },
     include: {
       template: { include: { fields: true } },
-      signers: true,
+      // Omit signatureImageData — images live in fieldValues.__signatures__ when needed for overlays.
+      signers: {
+        select: {
+          id: true,
+          labourerUserId: true,
+          signatureStatus: true,
+          signedAt: true,
+        },
+      },
       selectedToolboxTopic: {
         select: {
           id: true,

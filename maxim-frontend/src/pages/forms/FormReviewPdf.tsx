@@ -12,7 +12,7 @@ import {
   requestPdfSubmissionResubmission,
   type PdfSubmissionDetail,
 } from "@/api/library";
-import { pdfDataUrlToImageDataUrls } from "@/utils/pdfToImages";
+import { pdfDataUrlToImageDataUrlsProgressive } from "@/utils/pdfToImages";
 import { api } from "@/api";
 import SignatureModal from "@/components/pdf/SignatureModal";
 import { Card } from "@/components/ui/Card";
@@ -591,13 +591,33 @@ export function FormReviewPdf() {
       setLoadingPdf(false);
       return;
     }
+    const cancelled = { cancelled: false };
     setLoadingPdf(true);
+    setPageImages([]);
     fetchPdfBlob(filePath)
       .then((blob) => blobToDataUrl(blob))
-      .then((dataUrl) => pdfDataUrlToImageDataUrls(dataUrl))
-      .then(setPageImages)
-      .catch(() => setPageImages([]))
-      .finally(() => setLoadingPdf(false));
+      .then((dataUrl) =>
+        pdfDataUrlToImageDataUrlsProgressive(
+          dataUrl,
+          (images, meta) => {
+            if (cancelled.cancelled) return;
+            setPageImages(images);
+            // Show the form as soon as page 1 is ready; finish spinner when all pages done.
+            if (images.length > 0) setLoadingPdf(false);
+            if (meta.done) setLoadingPdf(false);
+          },
+          { signal: cancelled }
+        )
+      )
+      .catch(() => {
+        if (!cancelled.cancelled) {
+          setPageImages([]);
+          setLoadingPdf(false);
+        }
+      });
+    return () => {
+      cancelled.cancelled = true;
+    };
   }, [
     submission?.template?.filePath,
     submission?.finalPdfBlobPath,

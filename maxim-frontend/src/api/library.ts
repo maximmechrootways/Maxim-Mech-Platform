@@ -341,9 +341,34 @@ export async function deletePdfTemplate(id: string): Promise<void> {
   await api.delete(`/pdf-templates/${id}`)
 }
 
-export async function fetchPdfSubmissions(params?: { submittedById?: string; titleSearch?: string; status?: string }): Promise<PdfSubmissionRecord[]> {
+export async function fetchPdfSubmissions(params?: {
+  submittedById?: string
+  titleSearch?: string
+  /** Single status or comma-separated (e.g. SUBMITTED,AWAITING_SIGNATURES) */
+  status?: string
+  limit?: number
+}): Promise<PdfSubmissionRecord[]> {
   const { data } = await api.get<PdfSubmissionRecord[]>('/pdf-submissions', { params })
   return Array.isArray(data) ? data : []
+}
+
+export interface PdfSubmissionStats {
+  total: number
+  byStatus: Record<string, number>
+  awaitingApproval: number
+  resubmitRequired: number
+}
+
+export async function fetchPdfSubmissionStats(): Promise<PdfSubmissionStats> {
+  const { data } = await api.get<PdfSubmissionStats>('/pdf-submissions/stats')
+  return (
+    data ?? {
+      total: 0,
+      byStatus: {},
+      awaitingApproval: 0,
+      resubmitRequired: 0,
+    }
+  )
 }
 
 export interface PdfSubmissionDetailTemplate {
