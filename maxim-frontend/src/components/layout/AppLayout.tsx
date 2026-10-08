@@ -272,6 +272,8 @@ export function AppLayout() {
     '/hazard-review',
     '/health-safety-manual',
     '/safety/meeting-minutes',
+    '/safety/posters',
+    '/sites',
     '/feedback',
     '/certificates',
     '/hr/time-off',

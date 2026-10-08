@@ -16,6 +16,7 @@ const DOC_TYPES = [
   'Meeting Minutes',
   'Agenda',
   'SDS',
+  'Safety Poster',
   'Inspection',
   'Incident',
   'Safety',
@@ -59,6 +60,8 @@ export function LibraryDocumentUpload() {
       setType('Meeting Minutes')
     } else if (forParam === 'agenda') {
       setType('Agenda')
+    } else if (forParam === 'safety-posters') {
+      setType('Safety Poster')
     }
   }, [searchParams])
 
@@ -66,6 +69,7 @@ export function LibraryDocumentUpload() {
     const forParam = searchParams.get('for')
     if (forParam === 'sds') return '/safety/sds'
     if (forParam === 'meeting-minutes' || forParam === 'agenda') return '/safety/meeting-minutes'
+    if (forParam === 'safety-posters') return '/safety/posters'
     if (forParam === 'signed-policies') return '/health-safety-manual'
     return '/library?view=documents'
   })()
@@ -74,12 +78,14 @@ export function LibraryDocumentUpload() {
     const forParam = searchParams.get('for')
     if (forParam === 'sds') return '← Back to SDS'
     if (forParam === 'meeting-minutes' || forParam === 'agenda') return '← Back to Meeting Minutes / Agendas'
+    if (forParam === 'safety-posters') return '← Back to Safety Posters'
     if (forParam === 'signed-policies') return '← Back to Health & Safety Manual'
     return '← Back to documents'
   })()
 
   const isMeetingDocsUpload =
     searchParams.get('for') === 'meeting-minutes' || searchParams.get('for') === 'agenda'
+  const isSafetyPostersUpload = searchParams.get('for') === 'safety-posters'
 
   const toggleRole = (role: UserRole) => {
     setVisibleToRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]))
@@ -160,14 +166,18 @@ export function LibraryDocumentUpload() {
               ? 'Upload Meeting Minutes'
               : searchParams.get('for') === 'agenda'
                 ? 'Upload Agenda'
-                : 'Upload Document'}
+                : isSafetyPostersUpload
+                  ? 'Upload Safety Poster'
+                  : 'Upload Document'}
         </CardHeader>
         <CardDescription>
           {searchParams.get('for') === 'sds'
             ? 'Upload a safety data sheet PDF. It will appear on the SDS bulletin board for the crew to view and download.'
             : isMeetingDocsUpload
               ? 'Upload a PDF for the Meeting Minutes / Agendas page on the bulletin board. Documents have no fillable fields — they are for viewing and distribution only.'
-              : 'Same as templates: upload a PDF to the system. Documents have no fillable fields — they are for viewing and distribution only. Set visibility so everyone or only certain roles can see it.'}
+              : isSafetyPostersUpload
+                ? 'Upload a safety poster PDF. It will appear on the Safety Posters bulletin board for the crew to view and download.'
+                : 'Same as templates: upload a PDF to the system. Documents have no fillable fields — they are for viewing and distribution only. Set visibility so everyone or only certain roles can see it.'}
         </CardDescription>
         <div className="mt-6 space-y-4">
           <div className="w-full min-h-[120px] rounded-xl border-2 border-dashed border-neutral-300 dark:border-neutral-600 flex flex-col items-center justify-center gap-2 bg-neutral-50/50 dark:bg-neutral-800/30 py-6">

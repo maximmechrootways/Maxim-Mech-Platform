@@ -16,8 +16,8 @@ export interface FeaturePermission {
 
 export const PERMISSIONS: FeaturePermission[] = [
     { feature: 'dashboard', label: 'Dashboard', viewRoles: ['owner', 'hr', 'supervisor', 'labourer', 'user'], manageRoles: [] },
-    { feature: 'jobs', label: 'Jobs', viewRoles: ['owner', 'hr', 'supervisor'], manageRoles: ['owner', 'hr', 'supervisor'] },
-    { feature: 'sites', label: 'Sites', viewRoles: ['owner', 'hr', 'supervisor'], manageRoles: ['owner', 'hr'] },
+    { feature: 'jobs', label: 'Jobs', viewRoles: ['owner', 'hr', 'supervisor', 'labourer'], manageRoles: ['owner', 'hr', 'supervisor'] },
+    { feature: 'sites', label: 'Sites', viewRoles: ['owner', 'hr', 'supervisor', 'labourer'], manageRoles: ['owner', 'hr'] },
     { feature: 'subcontractors', label: 'Subcontractors', viewRoles: ['owner', 'hr', 'supervisor'], manageRoles: ['owner', 'hr'] },
     { feature: 'incidents', label: 'Incidents', viewRoles: ['owner', 'hr', 'supervisor'], manageRoles: ['owner', 'hr', 'supervisor'] },
     { feature: 'near_miss', label: 'Near Miss', viewRoles: ['owner', 'hr', 'supervisor'], manageRoles: ['owner', 'hr', 'supervisor'] },

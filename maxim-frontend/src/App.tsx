@@ -71,6 +71,7 @@ import { RegulationsReference } from '@/pages/safety/RegulationsReference'
 import { HealthSafetyManual } from '@/pages/safety/HealthSafetyManual'
 import { SdsLibrary } from '@/pages/safety/SdsLibrary'
 import { MeetingMinutesAgenda } from '@/pages/safety/MeetingMinutesAgenda'
+import { SafetyPosters } from '@/pages/safety/SafetyPosters'
 import { FeedbackPage } from '@/pages/feedback/FeedbackPage'
 import { SafetyAnalytics } from '@/pages/safety/SafetyAnalytics'
 import { QRScanPlaceholder } from '@/pages/safety/QRScanPlaceholder'
@@ -193,6 +194,7 @@ export default function App() {
           <Route path="health-safety-manual" element={<HealthSafetyManual />} />
           <Route path="safety/sds" element={<SdsLibrary />} />
           <Route path="safety/meeting-minutes" element={<MeetingMinutesAgenda />} />
+          <Route path="safety/posters" element={<SafetyPosters />} />
           <Route path="daily-forms" element={<DailyForms />} />
           <Route path="daily-forms/fill/:dailyFormId" element={<DailyFormFillRouteGate />} />
           <Route path="daily-forms/sign/:submissionId" element={<SignSignableForm />} />
@@ -200,9 +202,9 @@ export default function App() {
           <Route path="admin/scanned-forms" element={<Navigate to="/library?view=templates" replace />} />
           <Route path="jobs" element={<Navigate to="/sites" replace />} />
           <Route path="jobs/:id" element={<Navigate to="/sites" replace />} />
-          <Route path="sites" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><SitesList /></ProtectedRoute>} />
-          <Route path="sites/:siteId/projects/:jobId" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><ProjectDashboard /></ProtectedRoute>} />
-          <Route path="sites/:id" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><SiteDetail /></ProtectedRoute>} />
+          <Route path="sites" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor', 'labourer']}><SitesList /></ProtectedRoute>} />
+          <Route path="sites/:siteId/projects/:jobId" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor', 'labourer']}><ProjectDashboard /></ProtectedRoute>} />
+          <Route path="sites/:id" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor', 'labourer']}><SiteDetail /></ProtectedRoute>} />
           <Route path="my-jobs" element={<ProtectedRoute roles={['supervisor']}><MyJobs /></ProtectedRoute>} />
           <Route path="equipment" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><EquipmentList /></ProtectedRoute>} />
           <Route path="equipment/:id" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><EquipmentDetail /></ProtectedRoute>} />

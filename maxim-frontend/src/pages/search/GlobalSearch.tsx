@@ -27,6 +27,8 @@ const APP_PAGES: { to: string; label: string; roles?: UserRole[] }[] = [
   { to: '/jobs', label: 'Job Management', roles: ['owner', 'hr'] },
   { to: '/health-safety-manual', label: 'Health and Safety Manual' },
   { to: '/safety/meeting-minutes', label: 'Meeting Minutes / Agendas' },
+  { to: '/safety/posters', label: 'Safety Posters' },
+  { to: '/sites', label: 'Job Sites' },
   { to: '/estimating/project-future-work', label: 'Estimating Project Future Work', roles: ['owner', 'hr', 'supervisor'] },
   { to: '/estimating/current-projects', label: 'Current Projects', roles: ['owner', 'hr', 'supervisor'] },
   { to: '/estimating/past-project-directory', label: 'Past Project Directory', roles: ['owner', 'hr', 'supervisor'] },

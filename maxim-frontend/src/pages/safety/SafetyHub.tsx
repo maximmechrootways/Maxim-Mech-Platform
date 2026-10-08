@@ -7,51 +7,25 @@ import type { UserRole } from '@/types'
 
 type HubAction = { to: string; label: string; description: string; icon: string; roles?: UserRole[] }
 
-const COMPLETED_FORM_ACTIONS: HubAction[] = [
-  { to: '/library?view=submissions&from=safety', label: 'All Form Submissions', description: 'View all submitted forms, including newly added templates.', icon: '📂', roles: ['owner', 'hr', 'supervisor', 'labourer'] },
-  { to: '/library?view=submissions&from=safety&bucket=daily-hazard', label: 'Daily Hazard Assessments', description: 'View submitted daily hazard assessment forms.', icon: '📋', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=tool-box-talks', label: 'Tool Box Talks', description: 'View submitted toolbox talk forms.', icon: '🧰', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=weekly-inspections', label: 'Weekly Inspections', description: 'View weekly inspection submissions and results.', icon: '🗓️', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=equipment-inspections', label: 'Equipment Inspections', description: 'View equipment inspection submissions and files.', icon: '🛠️', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=fall-arrest', label: 'Fall Arrest', description: 'View fall arrest inspection submissions.', icon: '🦺', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=power-elevating', label: 'Power Elevating / Work Platforms', description: 'View power elevating work platform submissions.', icon: '🛗', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=washroom-inspections', label: 'Washroom Inspections', description: 'View washroom inspection submissions.', icon: '🚻', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=hot-work', label: 'Hot Works Permits', description: 'View hot work permit submissions.', icon: '🔥', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=incident-reports', label: 'Incident Reports', description: 'View and review incident submissions.', icon: '⚠️', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=hazard-reports', label: 'Hazard Reports', description: 'View and review hazard reports.', icon: '🚧', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=near-miss', label: 'Near Miss', description: 'View near miss form submissions.', icon: '📝', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=pressure-testing', label: 'Pressure Testing Checklist', description: 'View pressure testing checklist submissions.', icon: '🧪', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=active-pipeline-hydrocarbons', label: 'Active Pipeline Connections — Hydrocarbons', description: 'View active pipeline hydrocarbon connection submissions.', icon: '🛢️', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=drain-vent-test', label: 'Drain and Vent Test Form', description: 'View drain and vent test form submissions.', icon: '💨', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=notice-of-transmittal', label: 'Notice Of Transmittal', description: 'View notice of transmittal submissions.', icon: '📨', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=work-log', label: 'Work Log', description: 'View work log submissions.', icon: '🧾', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=underground-piping-inspection', label: 'Underground Piping Inspection', description: 'View underground piping inspection submissions.', icon: '🛠️', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=confined-spaces', label: 'Confined Spaces', description: 'View confined space form submissions.', icon: '🧱', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=investigation', label: 'Investigation Kit', description: 'View investigation kit submissions.', icon: '🔍', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=lockout-tagout', label: 'Lock-Out Tag-Out', description: 'View lock-out tag-out submissions.', icon: '🔒', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=compliance-evaluation', label: 'Compliance Evaluation', description: 'View compliance evaluation submissions.', icon: '✅', roles: ['owner', 'hr'] },
-  { to: '/library?view=submissions&from=safety&bucket=other', label: 'Other Forms', description: 'View other completed forms.', icon: '📄', roles: ['owner', 'hr'] },
-]
+/** Shared bulletin tiles — same for labourer, supervisor, HR, and owner. */
+const ALL_ROLES: UserRole[] = ['owner', 'hr', 'supervisor', 'labourer']
 
 const DOCUMENT_ACTIONS: HubAction[] = [
-  { to: '/health-safety-manual', label: 'Health & Safety Manual', description: 'View uploaded health and safety manuals.', icon: '📘', roles: ['owner', 'hr', 'supervisor', 'labourer'] },
-  { to: '/certificates', label: 'Training & Certificates', description: 'View training records and certifications.', icon: '🎓', roles: ['owner', 'hr', 'supervisor'] },
-  { to: '/safety/sds', label: 'SDS', description: 'View and upload safety data sheets.', icon: '🧪', roles: ['owner', 'hr', 'supervisor', 'labourer'] },
-  { to: '/safety/analytics', label: 'Safety Analytics', description: 'View trends and analytics dashboards.', icon: '📊', roles: ['owner', 'hr'] },
-  { to: '/sites', label: 'Job Sites', description: 'View site-level safety and job data.', icon: '📍', roles: ['owner', 'hr', 'supervisor'] },
-  { to: '/safety/regulations', label: 'Regulatory Reference', description: 'View safety and regulatory reference information.', icon: '📖', roles: ['owner', 'hr'] },
-  { to: '/safety/corrective-actions', label: 'Corrective Action Plans', description: 'View CAPA records and progress.', icon: '🛠️', roles: ['owner', 'hr'] },
-  { to: '/safety/alerts', label: 'Safety Alerts', description: 'View active safety alerts and bulletins.', icon: '📢', roles: ['owner', 'hr', 'supervisor', 'labourer'] },
-  { to: '/safety/meeting-minutes', label: 'Meeting Minutes / Agendas', description: 'View uploaded meeting records.', icon: '🗒️', roles: ['owner', 'hr', 'supervisor', 'labourer'] },
+  { to: '/health-safety-manual', label: 'Health & Safety Manual', description: 'View uploaded health and safety manuals.', icon: '📘', roles: ALL_ROLES },
+  { to: '/safety/sds', label: 'SDS', description: 'View and upload safety data sheets.', icon: '🧪', roles: ALL_ROLES },
+  { to: '/sites', label: 'Job Sites', description: 'View site-level safety and job data.', icon: '📍', roles: ALL_ROLES },
+  { to: '/safety/posters', label: 'Safety Posters', description: 'View posted safety posters and visual reminders.', icon: '🪧', roles: ALL_ROLES },
+  { to: '/safety/alerts', label: 'Safety Alerts', description: 'View active safety alerts and bulletins.', icon: '📢', roles: ALL_ROLES },
+  { to: '/safety/meeting-minutes', label: 'Meeting Minutes / Agendas', description: 'View uploaded meeting records.', icon: '🗒️', roles: ALL_ROLES },
 ]
 
 export function SafetyHub() {
   const { user } = useUser()
   const { isPinned, togglePinned } = usePinnedSafety()
   const isHrView = user?.role === 'owner' || user?.role === 'hr'
-  const bulletinRole: UserRole | null = isHrView ? 'labourer' : (user?.role ?? null)
-  const visibleCompletedForms = COMPLETED_FORM_ACTIONS.filter((a) => !a.roles || (bulletinRole && a.roles.includes(bulletinRole)))
-  const visibleDocuments = DOCUMENT_ACTIONS.filter((a) => !a.roles || (bulletinRole && a.roles.includes(bulletinRole)))
+  const visibleDocuments = DOCUMENT_ACTIONS.filter(
+    (a) => !a.roles || (user?.role && a.roles.includes(user.role)),
+  )
   const canPin = user?.role === 'owner' || user?.role === 'hr'
   const renderActionGrid = (actions: HubAction[]) => (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -91,14 +65,9 @@ export function SafetyHub() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Health & Safety</h1>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">This page is for viewing completed submissions and safety documents.</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">Bulletin board for safety documents, sites, alerts, and posters.</p>
         </div>
       </div>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-300">Completed Forms</h2>
-        {renderActionGrid(visibleCompletedForms)}
-      </section>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-300">Health & Safety Documents</h2>
@@ -113,7 +82,7 @@ export function SafetyHub() {
               <Link to="/library/upload-document" className="flex flex-col flex-1">
                 <span className="text-2xl mb-2 block">🗂️</span>
                 <CardHeader className="p-0">Upload / Update Documents</CardHeader>
-                <CardDescription className="mt-1 flex-1">Publish latest manuals, SDS, meeting minutes, and safety files.</CardDescription>
+                <CardDescription className="mt-1 flex-1">Publish latest manuals, SDS, meeting minutes, posters, and safety files.</CardDescription>
                 <Button variant="outline" size="sm" className="mt-3 w-fit">Manage docs</Button>
               </Link>
             </Card>
