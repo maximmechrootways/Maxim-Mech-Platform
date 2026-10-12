@@ -42,14 +42,16 @@ const uploadExtraPdfUpload = multer({
 router.get('/', async (req, res, next) => {
   try {
     const limitRaw = req.query.limit != null ? Number(req.query.limit) : undefined
+    const pageRaw = req.query.page != null ? Number(req.query.page) : undefined
     const query = {
       submittedById: req.query.submittedById as string | undefined,
       titleSearch: req.query.titleSearch as string | undefined,
       status: req.query.status as string | undefined,
       limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+      page: Number.isFinite(pageRaw) ? pageRaw : undefined,
     }
-    const list = await listSubmissions(req.user!.id, req.user!.role, query)
-    res.status(200).json(list)
+    const result = await listSubmissions(req.user!.id, req.user!.role, query)
+    res.status(200).json(result)
   } catch (e: any) {
     if (e.status) return res.status(e.status).json({ error: e.message })
     next(e)

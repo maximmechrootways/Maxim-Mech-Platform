@@ -1113,9 +1113,9 @@ export function FormFill({ forceKissMode = false }: { forceKissMode?: boolean } 
     if (!templateId || !isAuthenticated || !user?.id) return
     setDhaSavedDraftsLoading(true)
     try {
-      const list = await fetchPdfSubmissions({ status: 'DRAFT' })
+      const page = await fetchPdfSubmissions({ status: 'DRAFT', limit: 100 })
       setDhaSavedDrafts(
-        list
+        page.items
           .filter(
             (s) =>
               s.templateId === templateId &&

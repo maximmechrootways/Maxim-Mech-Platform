@@ -131,12 +131,12 @@ export function DashboardHR() {
       /tool\s*box|toolbox/i.test(text)
 
     Promise.all([
-      fetchPdfSubmissions(),
+      fetchPdfSubmissions({ limit: 100 }),
       listDailyHazardSubmissions().catch(() => []),
     ])
-      .then(([pdfList, dhaList]) => {
+      .then(([pdfPage, dhaList]) => {
         if (cancelled) return
-        const all = Array.isArray(pdfList) ? pdfList : []
+        const all = Array.isArray(pdfPage?.items) ? pdfPage.items : []
         const nonDraft = all.filter((s) => s.status !== 'DRAFT')
         setAllPdfSubmissions(nonDraft)
 

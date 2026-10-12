@@ -50,10 +50,10 @@ export function DashboardSupervisor() {
       setMyPdfDrafts([])
       return
     }
-    fetchPdfSubmissions({ status: 'DRAFT' })
-      .then((list) =>
+    fetchPdfSubmissions({ status: 'DRAFT', limit: 100 })
+      .then((page) =>
         setMyPdfDrafts(
-          list.filter((s) => {
+          page.items.filter((s) => {
             if (s.submittedById !== user.id) return false
             if (isWashroomDraftForMyDraftsList(s.templateName)) return false
             if (/daily\s*hazard|daily\s*jha/i.test(String(s.templateName ?? ''))) return s.userSavedDraft === true
@@ -62,13 +62,13 @@ export function DashboardSupervisor() {
         )
       )
       .catch(() => setMyPdfDrafts([]))
-    fetchPdfSubmissions({ status: 'RESUBMIT_REQUIRED' })
-      .then((list) => setMyResubmissions(list.filter((s) => s.submittedById === user.id)))
+    fetchPdfSubmissions({ status: 'RESUBMIT_REQUIRED', limit: 100 })
+      .then((page) => setMyResubmissions(page.items.filter((s) => s.submittedById === user.id)))
       .catch(() => setMyResubmissions([]))
-    fetchPdfSubmissions({ submittedById: user.id })
-      .then((list) =>
+    fetchPdfSubmissions({ submittedById: user.id, limit: 100 })
+      .then((page) =>
         setMySubmittedForms(
-          list
+          page.items
             .filter((s) => s.status !== 'DRAFT')
             .sort((a, b) => {
               const aTime = Date.parse(String(a.createdAt ?? '')) || 0

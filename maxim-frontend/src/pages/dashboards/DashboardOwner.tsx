@@ -34,8 +34,8 @@ export function DashboardOwner() {
   }, [assigneeFilter])
 
   useEffect(() => {
-    fetchPdfSubmissions({ status: 'SUBMITTED' })
-      .then((list) => setSubmittedForReview(list.map((s) => ({
+    fetchPdfSubmissions({ status: 'SUBMITTED', limit: 100 })
+      .then((page) => setSubmittedForReview(page.items.map((s) => ({
         id: s.id,
         templateName: s.templateName as string,
         title: (s as any).title,
@@ -45,8 +45,8 @@ export function DashboardOwner() {
   }, [])
 
   useEffect(() => {
-    fetchPdfSubmissions({ status: 'RESUBMIT_REQUIRED' })
-      .then(setMyResubmissions)
+    fetchPdfSubmissions({ status: 'RESUBMIT_REQUIRED', limit: 100 })
+      .then((page) => setMyResubmissions(page.items))
       .catch(() => setMyResubmissions([]))
   }, [])
 

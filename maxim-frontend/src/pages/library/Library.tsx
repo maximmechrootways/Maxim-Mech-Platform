@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link, useSearchParams, useLocation } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -13,11 +13,17 @@ import { canUserAccessTemplate } from '@/utils/templateAccess'
 import { useFormSubmissions } from '@/contexts/FormSubmissionsContext'
 import { useSignableSubmissions } from '@/contexts/SignableSubmissionsContext'
 import { useSigning } from '@/contexts/SigningContext'
-import { fetchPdfTemplates, fetchPdfSubmissions, fetchPdfSubmissionStats, deletePdfTemplate, deleteDraftPdfSubmissions, exportMergedPdfSubmissions, fetchDailyFormsMyTeam, createFormAssignment, fetchFormAssignments, reviewFormAssignment, replaceLibraryDocumentFile, type PdfTemplateRecord, type PdfSubmissionRecord, type PdfSubmissionStats, type FormAssignmentRecord } from '@/api/library'
+import { fetchPdfTemplates, fetchPdfSubmissions, fetchPdfSubmissionStats, deletePdfTemplate, deleteDraftPdfSubmissions, exportMergedPdfSubmissions, fetchDailyFormsMyTeam, createFormAssignment, fetchFormAssignments, reviewFormAssignment, replaceLibraryDocumentFile, type PdfTemplateRecord, type PdfSubmissionRecord, type PdfSubmissionStats, type PdfSubmissionsPage, type FormAssignmentRecord } from '@/api/library'
 import { listDailyHazardSubmissions, type DailyHazardSubmissionSummary } from '@/api/dailyHazardAnalysis'
 import { fetchNearMisses, type NearMissRecord } from '@/api/nearMisses'
 import { downloadBlob } from '@/utils/fileActions'
 import { isWashroomDraftForMyDraftsList } from '@/utils/washroomTemplate'
+import {
+  clearCompletedFormsFilters,
+  DEFAULT_COMPLETED_FORMS_FILTERS,
+  loadCompletedFormsFilters,
+  saveCompletedFormsFilters,
+} from '@/utils/completedFormsFilters'
 
 /** How often the form is typically used — drives Filters on Forms & Documents */
 export type FormFrequency = 'daily' | 'weekly' | 'when_needed' | 'other'
@@ -415,6 +421,7 @@ export function Library() {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const view = (searchParams.get('view') as LibraryView) || 'templates'
+  const savedCompletedFormsFilters = useMemo(() => loadCompletedFormsFilters(), [])
   const [message, setMessage] = useState<string | null>(null)
   useEffect(() => {
     const state = location.state as { message?: string } | null
@@ -424,8 +431,10 @@ export function Library() {
     }
   }, [location.state])
   const submissionFilter = (searchParams.get('status') as SubmissionFilter) || 'submitted'
-  const [search, setSearch] = useState('')
-  const [submittedByFilter, setSubmittedByFilter] = useState<string>('')
+  const [search, setSearch] = useState(() => savedCompletedFormsFilters?.search ?? '')
+  const [submittedByFilter, setSubmittedByFilter] = useState(
+    () => savedCompletedFormsFilters?.submittedById ?? ''
+  )
   const [docTypeFilter, setDocTypeFilter] = useState<string>('all')
   const [docSiteFilter, setDocSiteFilter] = useState<string>('all')
   const [signingSearch, setSigningSearch] = useState('')
@@ -434,7 +443,10 @@ export function Library() {
   const [formTagFilter, setFormTagFilter] = useState<'all' | FormTag>((searchParams.get('tag') as 'all' | FormTag) || 'all')
   const from = searchParams.get('from')
   const selectedBucket = searchParams.get('bucket')
-  const activeBucket = useMemo(() => COMPLETED_FORMS_BUCKETS.find((b) => b.id === selectedBucket) ?? null, [selectedBucket])
+  const activeBucket = useMemo(() => {
+    if (!selectedBucket) return null
+    return COMPLETED_FORMS_BUCKETS.find((b) => b.id === selectedBucket) ?? null
+  }, [selectedBucket])
   const activeBucketId = activeBucket?.id ?? null
   const backLinkTo = from === 'forms' ? '/library' : '/safety'
   const backLinkLabel = from === 'forms' ? 'Back to Forms & Documents' : 'Back to Health & Safety'
@@ -466,14 +478,52 @@ export function Library() {
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([])
   const [selectedExportSubmissionIds, setSelectedExportSubmissionIds] = useState<string[]>([])
   const [exportingSelected, setExportingSelected] = useState(false)
-  const [submissionDateFrom, setSubmissionDateFrom] = useState('')
-  const [submissionDateTo, setSubmissionDateTo] = useState('')
+  const [submissionDateFrom, setSubmissionDateFrom] = useState(
+    () => savedCompletedFormsFilters?.dateFrom ?? ''
+  )
+  const [submissionDateTo, setSubmissionDateTo] = useState(
+    () => savedCompletedFormsFilters?.dateTo ?? ''
+  )
   const [submissionSort, setSubmissionSort] = useState<{ key: SubmissionSortKey; direction: SubmissionSortDirection }>({
-    key: 'submittedAt',
-    direction: 'desc',
+    key: savedCompletedFormsFilters?.sortKey ?? 'submittedAt',
+    direction: savedCompletedFormsFilters?.sortDirection ?? 'desc',
   })
   const [deletingDrafts, setDeletingDrafts] = useState(false)
   const [submissionsMinimized, setSubmissionsMinimized] = useState(false)
+  const SUBMISSIONS_PAGE_SIZE = 25
+  const [tablePage, setTablePage] = useState(1)
+  const [pdfPageMeta, setPdfPageMeta] = useState<Pick<PdfSubmissionsPage, 'page' | 'limit' | 'total' | 'totalPages'>>({
+    page: 1,
+    limit: SUBMISSIONS_PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  })
+  const completedFormsFiltersHydratedRef = useRef(false)
+  const [completedFormsFiltersReady, setCompletedFormsFiltersReady] = useState(
+    () => view !== 'submissions'
+  )
+  const submissionsPanelRef = useRef<HTMLDivElement | null>(null)
+  const bucketNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const focusSubmissionsForBucket = useCallback((label: string) => {
+    setSubmissionsMinimized(false)
+    setMessage(`Showing ${label}`)
+    if (bucketNoticeTimerRef.current) clearTimeout(bucketNoticeTimerRef.current)
+    bucketNoticeTimerRef.current = setTimeout(() => {
+      setMessage((prev) => (prev === `Showing ${label}` ? null : prev))
+      bucketNoticeTimerRef.current = null
+    }, 4000)
+    // Wait a tick so the panel expands / badge renders before scrolling.
+    window.setTimeout(() => {
+      submissionsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (bucketNoticeTimerRef.current) clearTimeout(bucketNoticeTimerRef.current)
+    }
+  }, [])
 
   const loadPdfTemplates = useCallback(() => {
     setLoadingTemplates(true)
@@ -495,16 +545,28 @@ export function Library() {
       resubmit_required: 'RESUBMIT_REQUIRED',
     }
     const status = statusMap[submissionFilter] ?? 'SUBMITTED,AWAITING_SIGNATURES'
-    const paramsBase = { submittedById: submittedByFilter || undefined, limit: 300 }
-
+    // Server returns a paginated window + total. Client pages the merged/filtered table (25/page).
     fetchPdfSubmissions({
       status: status || undefined,
-      ...paramsBase,
+      submittedById: submittedByFilter || undefined,
+      page: 1,
+      limit: 100,
     })
-      .then(setPdfSubmissions)
-      .catch(() => setPdfSubmissions([]))
+      .then((result) => {
+        setPdfSubmissions(result.items)
+        setPdfPageMeta({
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: result.totalPages,
+        })
+      })
+      .catch(() => {
+        setPdfSubmissions([])
+        setPdfPageMeta({ page: 1, limit: SUBMISSIONS_PAGE_SIZE, total: 0, totalPages: 1 })
+      })
       .finally(() => setLoadingSubmissions(false))
-  }, [submissionFilter, submittedByFilter])
+  }, [submissionFilter, submittedByFilter, SUBMISSIONS_PAGE_SIZE])
   const loadDailyHazardSubmissions = useCallback(() => {
     listDailyHazardSubmissions()
       .then((list) => setDailyHazardSubmissions(Array.isArray(list) ? list : []))
@@ -521,12 +583,13 @@ export function Library() {
     Promise.all([
       fetchPdfSubmissions({
         status: 'SUBMITTED,AWAITING_SIGNATURES,RESUBMIT_REQUIRED',
+        page: 1,
         limit: 100,
       }),
       fetchPdfSubmissionStats().catch(() => null),
     ])
-      .then(([rows, stats]) => {
-        setDashboardPdfSubmissions(Array.isArray(rows) ? rows : [])
+      .then(([page, stats]) => {
+        setDashboardPdfSubmissions(Array.isArray(page.items) ? page.items : [])
         if (stats) setSubmissionStats(stats)
       })
       .catch(() => {
@@ -541,21 +604,134 @@ export function Library() {
     loadPdfTemplates()
   }, [view, loadPdfTemplates])
   useEffect(() => {
+    // Wait until stored filters are reapplied so we don't fetch twice (default then restored).
+    if (view === 'submissions' && !completedFormsFiltersReady) return
     loadPdfSubmissions()
-  }, [loadPdfSubmissions, submissionFilter, submittedByFilter])
+  }, [loadPdfSubmissions, submissionFilter, submittedByFilter, view, completedFormsFiltersReady])
   useEffect(() => {
     if (view !== 'submissions') return
+    if (!completedFormsFiltersReady) return
     loadDashboardPdfSubmissions()
     // DHA list is now summary-sized (no signature blobs); still needed for table + awaiting card.
     loadDailyHazardSubmissions()
     loadNearMissSubmissions()
-  }, [view, loadDailyHazardSubmissions, loadNearMissSubmissions, loadDashboardPdfSubmissions])
+  }, [view, completedFormsFiltersReady, loadDailyHazardSubmissions, loadNearMissSubmissions, loadDashboardPdfSubmissions])
   useEffect(() => {
     if (view !== 'signing') return
-    fetchPdfSubmissions({ status: 'AWAITING_SIGNATURES', limit: 200 })
-      .then(setPendingSignatureSubmissions)
+    fetchPdfSubmissions({ status: 'AWAITING_SIGNATURES', page: 1, limit: 100 })
+      .then((page) => setPendingSignatureSubmissions(page.items))
       .catch(() => setPendingSignatureSubmissions([]))
   }, [view])
+
+  // Reset to first page whenever filters that change the result set are updated.
+  useEffect(() => {
+    setTablePage(1)
+  }, [
+    submissionFilter,
+    submittedByFilter,
+    search,
+    activeBucketId,
+    submissionDateFrom,
+    submissionDateTo,
+  ])
+
+  // Restore Completed Forms filters from localStorage when landing on the page
+  // without an explicit status/bucket in the URL (e.g. back from a form, sidebar).
+  // Explicit URL params from Safety hub links win for that visit.
+  useEffect(() => {
+    if (view !== 'submissions') {
+      completedFormsFiltersHydratedRef.current = false
+      setCompletedFormsFiltersReady(true)
+      return
+    }
+    if (completedFormsFiltersHydratedRef.current) return
+    completedFormsFiltersHydratedRef.current = true
+
+    const saved = loadCompletedFormsFilters()
+    const validBucketIds = new Set(COMPLETED_FORMS_BUCKETS.map((b) => b.id))
+    const urlHasStatus = searchParams.has('status')
+    const urlHasBucket = searchParams.has('bucket')
+
+    // Re-apply local-only filters in case Library stayed mounted across views.
+    if (saved) {
+      if (typeof saved.search === 'string') setSearch(saved.search)
+      if (typeof saved.submittedById === 'string') setSubmittedByFilter(saved.submittedById)
+      if (typeof saved.dateFrom === 'string') setSubmissionDateFrom(saved.dateFrom)
+      if (typeof saved.dateTo === 'string') setSubmissionDateTo(saved.dateTo)
+      if (saved.sortKey || saved.sortDirection) {
+        setSubmissionSort({
+          key: saved.sortKey ?? 'submittedAt',
+          direction: saved.sortDirection ?? 'desc',
+        })
+      }
+    }
+
+    setSearchParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        let changed = false
+        if (!urlHasStatus && saved?.status) {
+          next.set('status', saved.status)
+          changed = true
+        }
+        if (!urlHasBucket && saved?.bucket && validBucketIds.has(saved.bucket)) {
+          next.set('bucket', saved.bucket)
+          changed = true
+        }
+        return changed ? next : p
+      },
+      { replace: true }
+    )
+    setCompletedFormsFiltersReady(true)
+  }, [view, searchParams, setSearchParams])
+
+  // Persist Completed Forms filters whenever they change (after hydrate).
+  useEffect(() => {
+    if (view !== 'submissions' || !completedFormsFiltersReady) return
+    const validBucketIds = new Set(COMPLETED_FORMS_BUCKETS.map((b) => b.id))
+    saveCompletedFormsFilters({
+      status: submissionFilter,
+      bucket: selectedBucket && validBucketIds.has(selectedBucket) ? selectedBucket : null,
+      search,
+      submittedById: submittedByFilter,
+      dateFrom: submissionDateFrom,
+      dateTo: submissionDateTo,
+      sortKey: submissionSort.key,
+      sortDirection: submissionSort.direction,
+    })
+  }, [
+    view,
+    completedFormsFiltersReady,
+    submissionFilter,
+    selectedBucket,
+    search,
+    submittedByFilter,
+    submissionDateFrom,
+    submissionDateTo,
+    submissionSort,
+  ])
+
+  const resetCompletedFormsFilters = useCallback(() => {
+    clearCompletedFormsFilters()
+    setSearch(DEFAULT_COMPLETED_FORMS_FILTERS.search)
+    setSubmittedByFilter(DEFAULT_COMPLETED_FORMS_FILTERS.submittedById)
+    setSubmissionDateFrom(DEFAULT_COMPLETED_FORMS_FILTERS.dateFrom)
+    setSubmissionDateTo(DEFAULT_COMPLETED_FORMS_FILTERS.dateTo)
+    setSubmissionSort({
+      key: DEFAULT_COMPLETED_FORMS_FILTERS.sortKey,
+      direction: DEFAULT_COMPLETED_FORMS_FILTERS.sortDirection,
+    })
+    setSearchParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        next.set('view', 'submissions')
+        next.set('status', DEFAULT_COMPLETED_FORMS_FILTERS.status)
+        next.delete('bucket')
+        return next
+      },
+      { replace: true }
+    )
+  }, [setSearchParams])
 
   // --- Assign modal state ---
   const [assignModalOpen, setAssignModalOpen] = useState(false)
@@ -904,6 +1080,26 @@ export function Library() {
     })
     return rows
   }, [filteredPdfSubmissions, filteredDailyHazardSubmissions, filteredNearMissSubmissions, submissionSort])
+
+  // Client pages the merged/filtered rows currently loaded from the server window.
+  const loadedTableRows = sortedSubmissionRows.length
+  const tableTotalPages = Math.max(1, Math.ceil(loadedTableRows / SUBMISSIONS_PAGE_SIZE) || 1)
+  const safeTablePage = Math.min(tablePage, tableTotalPages)
+  const pagedSubmissionRows = useMemo(() => {
+    const start = (safeTablePage - 1) * SUBMISSIONS_PAGE_SIZE
+    return sortedSubmissionRows.slice(start, start + SUBMISSIONS_PAGE_SIZE)
+  }, [sortedSubmissionRows, safeTablePage, SUBMISSIONS_PAGE_SIZE])
+  const tableRangeStart =
+    loadedTableRows === 0 ? 0 : (safeTablePage - 1) * SUBMISSIONS_PAGE_SIZE + 1
+  const tableRangeEnd = Math.min(safeTablePage * SUBMISSIONS_PAGE_SIZE, loadedTableRows)
+  const canGoPrevPage = safeTablePage > 1
+  const canGoNextPage = safeTablePage < tableTotalPages
+  const morePdfAvailableOnServer = pdfPageMeta.total > pdfSubmissions.length
+
+  useEffect(() => {
+    if (tablePage > tableTotalPages) setTablePage(tableTotalPages)
+  }, [tablePage, tableTotalPages])
+
   const sortedPdfSubmissions = useMemo(() => {
     const getValue = (s: PdfSubmissionRecord, key: SubmissionSortKey): string | number => {
       if (key === 'title') return (s.title ?? s.templateName ?? '').trim().toLowerCase()
@@ -1120,8 +1316,9 @@ export function Library() {
 
   const setSubmissionFilter = (f: SubmissionFilter) => {
     setSearchParams((p) => {
-      const next: Record<string, string> = { ...Object.fromEntries(p), view: 'submissions' }
-      next.status = f
+      const next = new URLSearchParams(p)
+      next.set('view', 'submissions')
+      next.set('status', f)
       return next
     })
     setSubmittedByFilter('')
@@ -1568,6 +1765,7 @@ export function Library() {
             </Card>
           )}
 
+          <div ref={submissionsPanelRef} id="completed-forms-submissions" className="scroll-mt-4">
           <Card padding="lg">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1674,6 +1872,16 @@ export function Library() {
                   Clear dates
                 </Button>
               )}
+              {(search ||
+                submittedByFilter ||
+                submissionDateFrom ||
+                submissionDateTo ||
+                selectedBucket ||
+                submissionFilter !== 'submitted') && (
+                <Button variant="outline" size="sm" onClick={resetCompletedFormsFilters}>
+                  Reset filters
+                </Button>
+              )}
               {exportRowsInCurrentResults.length > 0 && (
                 <Button
                   variant="secondary"
@@ -1710,6 +1918,7 @@ export function Library() {
                 <EmptyState title="No submissions yet." description="Fill a form from the Templates tab to create one, or try changing the status filter or search." />
               </div>
             ) : (
+              <>
               <div className="mt-4 overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-600">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -1729,12 +1938,6 @@ export function Library() {
                         <button type="button" onClick={() => toggleSubmissionSort('title')} className="inline-flex items-center gap-1 hover:text-neutral-900 dark:hover:text-white">
                           <span>Title</span>
                           <span aria-hidden>{sortArrowFor('title')}</span>
-                        </button>
-                      </th>
-                      <th className="py-3 px-4 font-medium text-neutral-600 dark:text-neutral-400">
-                        <button type="button" onClick={() => toggleSubmissionSort('template')} className="inline-flex items-center gap-1 hover:text-neutral-900 dark:hover:text-white">
-                          <span>Template</span>
-                          <span aria-hidden>{sortArrowFor('template')}</span>
                         </button>
                       </th>
                       <th className="py-3 px-4 font-medium text-neutral-600 dark:text-neutral-400">
@@ -1776,7 +1979,7 @@ export function Library() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedSubmissionRows.map((s) => (
+                    {pagedSubmissionRows.map((s) => (
                       <tr key={s.id} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
                         <td className="py-3 px-4">
                           {s.kind === 'pdf' && s.status === 'DRAFT' ? (
@@ -1794,26 +1997,38 @@ export function Library() {
                             <Link
                               to={`/forms/new/${s.raw.templateId}${s.raw.jobId ? `?jobId=${encodeURIComponent(s.raw.jobId)}&draftId=${encodeURIComponent(s.raw.id)}` : `?draftId=${encodeURIComponent(s.raw.id)}`}`}
                               className="font-medium text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400"
+                              title={s.templateName ? `Template: ${s.templateName}` : undefined}
                             >
                               {s.title}
                             </Link>
                           ) : (
                             s.kind === 'pdf' ? (
-                              <Link to={`/forms/${s.raw.id}`} className="font-medium text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400">
+                              <Link
+                                to={`/forms/${s.raw.id}`}
+                                className="font-medium text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400"
+                                title={s.templateName ? `Template: ${s.templateName}` : undefined}
+                              >
                                 {s.title}
                               </Link>
                             ) : s.kind === 'near-miss' ? (
-                              <Link to={`/safety/near-miss/${s.raw.id}?from=completed-forms`} className="font-medium text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400">
+                              <Link
+                                to={`/safety/near-miss/${s.raw.id}?from=completed-forms`}
+                                className="font-medium text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400"
+                                title={s.templateName ? `Template: ${s.templateName}` : undefined}
+                              >
                                 {s.title}
                               </Link>
                             ) : (
-                              <Link to={`/safety/daily-hazard-analysis/${s.raw.id}?from=completed-forms`} className="font-medium text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400">
+                              <Link
+                                to={`/safety/daily-hazard-analysis/${s.raw.id}?from=completed-forms`}
+                                className="font-medium text-neutral-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400"
+                                title={s.templateName ? `Template: ${s.templateName}` : undefined}
+                              >
                                 {s.title}
                               </Link>
                             )
                           )}
                         </td>
-                        <td className="py-3 px-4 text-neutral-700 dark:text-neutral-300">{s.templateName}</td>
                         <td className="py-3 px-4 text-sm text-neutral-700 dark:text-neutral-300">
                           {s.jobLabel}
                         </td>
@@ -1889,17 +2104,56 @@ export function Library() {
                   </tbody>
                 </table>
               </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  {loadedTableRows === 0
+                    ? 'No rows to show'
+                    : `Showing ${tableRangeStart}–${tableRangeEnd} of ${loadedTableRows}`}
+                  {morePdfAvailableOnServer ? (
+                    <span className="ml-1">
+                      ({pdfPageMeta.total} PDF submissions match on the server; refine filters to narrow)
+                    </span>
+                  ) : null}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!canGoPrevPage}
+                    onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-neutral-600 dark:text-neutral-300 tabular-nums">
+                    Page {safeTablePage} of {tableTotalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!canGoNextPage}
+                    onClick={() => setTablePage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+              </>
             )}
               </div>
             )}
           </Card>
+          </div>
           {from === 'safety' && completedFormBucketsForRole.length > 0 && (
             <section className="space-y-3 mt-6">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-300">Completed Form Buckets</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {completedFormBucketsForRole.map((bucket) => (
                   <Card key={bucket.label} hover padding="lg" className="h-full min-h-[180px] flex flex-col">
-                    <Link to={bucket.to} className="flex flex-col flex-1 min-w-0">
+                    <Link
+                      to={bucket.to}
+                      className="flex flex-col flex-1 min-w-0"
+                      onClick={() => focusSubmissionsForBucket(bucket.label)}
+                    >
                       <span className="text-2xl mb-2 block">{bucket.icon}</span>
                       <CardHeader className="p-0">{bucket.label}</CardHeader>
                       <CardDescription className="mt-1 flex-1">{bucket.description}</CardDescription>

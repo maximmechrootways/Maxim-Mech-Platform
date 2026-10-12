@@ -341,15 +341,47 @@ export async function deletePdfTemplate(id: string): Promise<void> {
   await api.delete(`/pdf-templates/${id}`)
 }
 
+export type PdfSubmissionsPage = {
+  items: PdfSubmissionRecord[]
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+function normalizePdfSubmissionsPage(data: unknown): PdfSubmissionsPage {
+  if (Array.isArray(data)) {
+    return {
+      items: data as PdfSubmissionRecord[],
+      page: 1,
+      limit: data.length,
+      total: data.length,
+      totalPages: 1,
+    }
+  }
+  if (data && typeof data === 'object' && Array.isArray((data as PdfSubmissionsPage).items)) {
+    const page = data as PdfSubmissionsPage
+    return {
+      items: page.items,
+      page: Number(page.page) || 1,
+      limit: Number(page.limit) || page.items.length,
+      total: Number(page.total) || page.items.length,
+      totalPages: Math.max(1, Number(page.totalPages) || 1),
+    }
+  }
+  return { items: [], page: 1, limit: 25, total: 0, totalPages: 1 }
+}
+
 export async function fetchPdfSubmissions(params?: {
   submittedById?: string
   titleSearch?: string
   /** Single status or comma-separated (e.g. SUBMITTED,AWAITING_SIGNATURES) */
   status?: string
   limit?: number
-}): Promise<PdfSubmissionRecord[]> {
-  const { data } = await api.get<PdfSubmissionRecord[]>('/pdf-submissions', { params })
-  return Array.isArray(data) ? data : []
+  page?: number
+}): Promise<PdfSubmissionsPage> {
+  const { data } = await api.get<PdfSubmissionsPage | PdfSubmissionRecord[]>('/pdf-submissions', { params })
+  return normalizePdfSubmissionsPage(data)
 }
 
 export interface PdfSubmissionStats {

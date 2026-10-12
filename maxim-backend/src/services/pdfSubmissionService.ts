@@ -811,8 +811,37 @@ function buildListWhere(
   return where;
 }
 
-const DEFAULT_LIST_LIMIT = 300;
-const MAX_LIST_LIMIT = 1000;
+const DEFAULT_PAGE_SIZE = 70;
+const DEFAULT_UNPAGED_LIMIT = 100;
+const MAX_LIST_LIMIT = 100;
+
+export type PdfSubmissionsListResult = {
+  items: Array<{
+    id: string;
+    templateId: string;
+    templateName: string;
+    title?: string;
+    status: string;
+    submittedById: string | null;
+    submittedBy?: { displayName: string };
+    submittedAt?: string;
+    createdAt: string;
+    needsMySignature: boolean;
+    signedSignatureCount: number;
+    pendingSignatureCount: number;
+    jobId?: string;
+    jobTitle?: string;
+    jobSiteName?: string;
+    resubmissionReason?: string;
+    resubmissionRequestedAt?: string;
+    resubmittedAt?: string;
+    userSavedDraft: boolean;
+  }>;
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
 
 export async function listSubmissions(
   userId: string,
@@ -822,45 +851,78 @@ export async function listSubmissions(
     titleSearch?: string;
     status?: string;
     limit?: number;
+    page?: number;
   },
-) {
+): Promise<PdfSubmissionsListResult> {
   const labourerIds =
     userRole === "supervisor"
       ? await jobService.getLabourerIdsSupervisedBy(userId)
       : undefined;
-  const where = buildListWhere(userId, userRole, query, labourerIds);
+  const accessWhere = buildListWhere(userId, userRole, query, labourerIds);
   const statuses = parseStatusFilter(query?.status);
   const includesDraft = statuses.length === 0 || statuses.includes("DRAFT");
+
+  const titleSearch = query?.titleSearch?.trim();
+  const where: Prisma.PdfSubmissionWhereInput =
+    isOwnerOrHr(userRole) && titleSearch
+      ? {
+          AND: [
+            accessWhere,
+            {
+              OR: [
+                { title: { contains: titleSearch, mode: "insensitive" } },
+                {
+                  template: {
+                    name: { contains: titleSearch, mode: "insensitive" },
+                  },
+                },
+              ],
+            },
+          ],
+        }
+      : accessWhere;
+
+  const page = Math.max(1, Number(query?.page) || 1);
+  const defaultLimit =
+    query?.page != null || query?.limit != null
+      ? DEFAULT_PAGE_SIZE
+      : DEFAULT_UNPAGED_LIMIT;
   const take = Math.min(
-    Math.max(1, Number(query?.limit) || DEFAULT_LIST_LIMIT),
+    Math.max(1, Number(query?.limit) || defaultLimit),
     MAX_LIST_LIMIT,
   );
+  const skip = (page - 1) * take;
 
-  // Narrow select: never pull template.fields or signer image blobs on list.
-  // fieldValues (with base64 signatures) is loaded separately and stripped in SQL.
-  const list = await prisma.pdfSubmission.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take,
-    select: {
-      id: true,
-      templateId: true,
-      title: true,
-      status: true,
-      submittedById: true,
-      submittedAt: true,
-      createdAt: true,
-      resubmissionReason: true,
-      resubmissionRequestedAt: true,
-      resubmittedAt: true,
-      extraPdfBlobPath: true,
-      template: { select: { id: true, name: true, pageCount: true } },
-      signers: { select: { labourerUserId: true, signatureStatus: true } },
-    },
-  });
+  const [total, list] = await Promise.all([
+    prisma.pdfSubmission.count({ where }),
+    prisma.pdfSubmission.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+      select: {
+        id: true,
+        templateId: true,
+        title: true,
+        status: true,
+        submittedById: true,
+        submittedAt: true,
+        createdAt: true,
+        resubmissionReason: true,
+        resubmissionRequestedAt: true,
+        resubmittedAt: true,
+        extraPdfBlobPath: true,
+        template: { select: { id: true, name: true, pageCount: true } },
+        signers: { select: { labourerUserId: true, signatureStatus: true } },
+      },
+    }),
+  ]);
 
   type Row = (typeof list)[number];
-  if (list.length === 0) return [];
+  const totalPages = Math.max(1, Math.ceil(total / take) || 1);
+  if (list.length === 0) {
+    return { items: [], page, limit: take, total, totalPages };
+  }
 
   const ids = list.map((s) => s.id);
   const slimRows = await prisma.$queryRaw<
@@ -901,17 +963,6 @@ export async function listSubmissions(
         s.title,
         s.extraPdfBlobPath ?? null,
         s.template.name,
-      );
-    });
-  }
-
-  if (isOwnerOrHr(userRole) && query?.titleSearch?.trim()) {
-    const q = query.titleSearch.trim().toLowerCase();
-    filtered = filtered.filter((s: Row) => {
-      const title = (s.title ?? s.template.name) || "";
-      return (
-        title.toLowerCase().includes(q) ||
-        s.template.name.toLowerCase().includes(q)
       );
     });
   }
@@ -975,7 +1026,7 @@ export async function listSubmissions(
     ]),
   );
 
-  return filtered.map((s: Row) => {
+  const items = filtered.map((s: Row) => {
     const fieldValues = slimById.get(s.id)?.fieldValues ?? {};
     const jid = extractLinkedJobId(fieldValues);
     const label = extractLinkedJobLabel(fieldValues);
@@ -984,7 +1035,6 @@ export async function listSubmissions(
         ? fallbackJobLabelMap[String(label).toLowerCase()]
         : undefined;
     const j = jid ? jobMap[jid] : fallbackJob;
-    // Site-like text without template.fields: use job label site segment when present.
     const siteFromLabel =
       typeof label === "string" && label.includes(" · ")
         ? label.split(" · ").slice(1).join(" · ").trim() || undefined
@@ -1020,6 +1070,8 @@ export async function listSubmissions(
       userSavedDraft: isExplicitUserSavedDhaDraft(fieldValues, s.template.name),
     };
   });
+
+  return { items, page, limit: take, total, totalPages };
 }
 
 /** Lightweight counts by status for dashboard cards — avoids fetching full submission rows. */

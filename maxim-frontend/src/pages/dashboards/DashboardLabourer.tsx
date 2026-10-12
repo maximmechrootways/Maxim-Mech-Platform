@@ -86,10 +86,10 @@ export function DashboardLabourer() {
       })
       .catch(() => setPendingDailySignatures([]))
     if (user?.id) {
-      fetchPdfSubmissions({ status: 'DRAFT' })
-        .then((list) =>
+      fetchPdfSubmissions({ status: 'DRAFT', limit: 100 })
+        .then((page) =>
           setMyPdfDrafts(
-            list.filter((s) => {
+            page.items.filter((s) => {
               if (s.submittedById !== user.id) return false
               if (isWashroomDraftForMyDraftsList(s.templateName)) return false
               if (/daily\s*hazard|daily\s*jha/i.test(String(s.templateName ?? ''))) return s.userSavedDraft === true
@@ -98,11 +98,11 @@ export function DashboardLabourer() {
           )
         )
         .catch(() => setMyPdfDrafts([]))
-      fetchPdfSubmissions({ status: 'AWAITING_SIGNATURES' })
-        .then((list) => setPendingPdfSignatures((list || []).filter((s) => Boolean(s.needsMySignature))))
+      fetchPdfSubmissions({ status: 'AWAITING_SIGNATURES', limit: 100 })
+        .then((page) => setPendingPdfSignatures(page.items.filter((s) => Boolean(s.needsMySignature))))
         .catch(() => setPendingPdfSignatures([]))
-      fetchPdfSubmissions({ status: 'RESUBMIT_REQUIRED' })
-        .then((list) => setResubmissions(list.filter((s) => s.submittedById === user.id)))
+      fetchPdfSubmissions({ status: 'RESUBMIT_REQUIRED', limit: 100 })
+        .then((page) => setResubmissions(page.items.filter((s) => s.submittedById === user.id)))
         .catch(() => setResubmissions([]))
       refreshDailyHazardDrafts(user.id)
     }

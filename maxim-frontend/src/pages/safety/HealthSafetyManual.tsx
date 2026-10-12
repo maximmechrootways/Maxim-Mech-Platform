@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/Input";
 import { IconDownload } from "@/components/icons/NavIcons";
 import { useUser } from "@/contexts/UserContext";
 import { useDocuments } from "@/contexts/DocumentsContext";
-import { getLibraryDocumentFileUrl } from "@/api/library";
+import { deleteLibraryDocument, getLibraryDocumentFileUrl } from "@/api/library";
 import { canUserViewDocument } from "@/utils/documentAccess";
+import { formatAxiosError } from "@/api";
 import type { DocumentRecord } from "@/types";
 
 const MANUAL_TYPES = new Set(["health and safety manual", "safety"]);
@@ -58,9 +59,15 @@ function formatDate(d: string | undefined): string {
 function DocumentRow({
   doc,
   sourceBadge,
+  canManage,
+  deleting,
+  onDelete,
 }: {
   doc: DocumentRecord;
   sourceBadge?: string;
+  canManage?: boolean;
+  deleting?: boolean;
+  onDelete?: (doc: DocumentRecord) => void;
 }) {
   const fileUrl = getLibraryDocumentFileUrl(doc.id);
   const sub = [doc.siteName, formatDate(doc.date)].filter(Boolean).join(" · ");
@@ -84,7 +91,7 @@ function DocumentRow({
           </p>
         ) : null}
       </div>
-      <div className="flex gap-2 shrink-0">
+      <div className="flex flex-wrap gap-2 shrink-0">
         <Link
           to={`/documents/${doc.id}`}
           className="inline-flex items-center justify-center min-h-[44px] px-5 rounded-xl text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
@@ -101,6 +108,18 @@ function DocumentRow({
         >
           Download
         </Button>
+        {canManage && onDelete ? (
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            className="min-h-[44px] px-4"
+            disabled={deleting}
+            onClick={() => onDelete(doc)}
+          >
+            {deleting ? "Deleting…" : "Delete"}
+          </Button>
+        ) : null}
       </div>
     </li>
   );
@@ -111,6 +130,8 @@ export function HealthSafetyManual() {
   const { documents, refetch, loading, loadError } = useDocuments();
   const isOwnerOrHr = user?.role === "owner" || user?.role === "hr";
   const [policySearch, setPolicySearch] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     void refetch();
@@ -135,6 +156,26 @@ export function HealthSafetyManual() {
     if (!q) return policies;
     return policies.filter((d) => d.name.toLowerCase().includes(q));
   }, [policies, policySearch]);
+
+  const handleDelete = async (doc: DocumentRecord) => {
+    if (
+      !window.confirm(
+        `Delete "${doc.name}"? This cannot be undone. You can upload a new version afterward if needed.`,
+      )
+    ) {
+      return;
+    }
+    setActionError(null);
+    setDeletingId(doc.id);
+    try {
+      await deleteLibraryDocument(doc.id);
+      await refetch();
+    } catch (e: unknown) {
+      setActionError(formatAxiosError(e) || "Failed to delete document.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="animate-fade-in max-w-2xl mx-auto px-4 py-6 pb-24">
@@ -174,7 +215,8 @@ export function HealthSafetyManual() {
           </span>{" "}
           or{" "}
           <span className="text-neutral-600 dark:text-neutral-400">Policy</span>
-          ) so they appear below with Read / Download.
+          ) so they appear below with Read / Download. Use Delete when a
+          document is outdated or was uploaded by mistake.
         </p>
       )}
 
@@ -184,6 +226,12 @@ export function HealthSafetyManual() {
           role="status"
         >
           {loadError}
+        </p>
+      ) : null}
+
+      {actionError ? (
+        <p className="mt-4 text-sm text-red-600 dark:text-red-400" role="alert">
+          {actionError}
         </p>
       ) : null}
 
@@ -200,7 +248,13 @@ export function HealthSafetyManual() {
         ) : (
           <ul>
             {manuals.map((d) => (
-              <DocumentRow key={d.id} doc={d} />
+              <DocumentRow
+                key={d.id}
+                doc={d}
+                canManage={isOwnerOrHr}
+                deleting={deletingId === d.id}
+                onDelete={handleDelete}
+              />
             ))}
           </ul>
         )}
@@ -257,6 +311,9 @@ export function HealthSafetyManual() {
                         ? "Policy update"
                         : undefined
                     }
+                    canManage={isOwnerOrHr}
+                    deleting={deletingId === d.id}
+                    onDelete={handleDelete}
                   />
                 ))}
               </ul>
