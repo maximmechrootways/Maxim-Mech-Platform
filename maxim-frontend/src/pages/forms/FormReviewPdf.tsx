@@ -2702,7 +2702,7 @@ export function FormReviewPdf() {
             return (
               <div
                 key={field.id}
-                className="absolute border border-transparent bg-transparent flex flex-col"
+                className="absolute border border-transparent bg-transparent flex flex-col form-review-pdf-print-signature"
                 style={{
                   left: `${x}%`,
                   top: `${y}%`,
@@ -2713,7 +2713,7 @@ export function FormReviewPdf() {
                 <img
                   src={sig.imageData}
                   alt="Signature"
-                  className="w-full flex-1 min-h-0 object-contain"
+                  className="w-full flex-1 min-h-0 object-contain form-review-pdf-print-sig-img"
                   loading="eager"
                   decoding="sync"
                 />
@@ -4582,21 +4582,24 @@ export function FormReviewPdf() {
                 {pageImages.map((src, idx) => (
                   <div
                     key={`print-page-${idx + 1}`}
-                    className={`form-review-pdf-print-page relative block w-full max-w-3xl mx-auto${
+                    className={`form-review-pdf-print-page${
                       idx === pageImages.length - 1
                         ? " form-review-pdf-print-page-last"
                         : ""
                     }`}
                   >
-                    <img
-                      src={src}
-                      alt={`Page ${idx + 1}`}
-                      className="pdf-page-img block w-full h-auto"
-                      loading="eager"
-                      decoding="sync"
-                    />
-                    <div className="absolute inset-0 top-0 left-0 right-0 bottom-0">
-                      {renderPdfPageFieldOverlays(idx + 1)}
+                    {/* Canvas wraps image + overlays so % field positions track the fitted Letter-scale image. */}
+                    <div className="form-review-pdf-print-page-canvas">
+                      <img
+                        src={src}
+                        alt={`Page ${idx + 1}`}
+                        className="pdf-page-img"
+                        loading="eager"
+                        decoding="sync"
+                      />
+                      <div className="absolute inset-0 top-0 left-0 right-0 bottom-0">
+                        {renderPdfPageFieldOverlays(idx + 1)}
+                      </div>
                     </div>
                   </div>
                 ))}

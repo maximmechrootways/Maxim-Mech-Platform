@@ -94,7 +94,8 @@ function copyStylesIntoDocument(targetDoc: Document, includeAppStyles: boolean):
 }
 
 const PRINT_IFRAME_STYLES = `
-  @page { margin: 10mm; size: auto; }
+  /* Force A4 so ANSI D / oversized sheets fit the print preview. */
+  @page { margin: 8mm; size: A4 portrait; }
   html, body {
     margin: 0;
     padding: 0;
@@ -105,7 +106,7 @@ const PRINT_IFRAME_STYLES = `
   }
   body {
     font-family: system-ui, -apple-system, sans-serif;
-    padding: 10mm;
+    padding: 0;
   }
   .no-print { display: none !important; }
   .print-only { display: block !important; visibility: visible !important; opacity: 1 !important; }
@@ -117,7 +118,7 @@ const PRINT_IFRAME_STYLES = `
     gap: 12px;
     border-bottom: 1px solid #e5e7eb;
     padding-bottom: 12px;
-    margin-bottom: 16px;
+    margin: 0 8mm 12px;
   }
   #form-review-pdf-print-root {
     max-width: 100%;
@@ -167,38 +168,70 @@ const PRINT_IFRAME_STYLES = `
   #form-review-pdf-print-root .shadow-md {
     box-shadow: none !important;
   }
+  /* Cap native/custom form signature images so they don't dominate a page. */
+  #form-review-pdf-print-root img[alt*='Signature'],
+  #form-review-pdf-print-root img[alt*='signature'] {
+    max-height: 22mm !important;
+    max-width: 70mm !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+  }
   .form-review-pdf-print-page {
     display: block !important;
     width: 100%;
-    position: relative;
+    text-align: center;
     page-break-after: always;
     break-after: page;
     break-inside: avoid;
     page-break-inside: avoid;
     margin: 0 auto;
+    overflow: hidden;
   }
   .form-review-pdf-print-page-last {
     page-break-after: auto;
     break-after: auto;
   }
+  /* Keep page image + overlays in one box so % field positions stay aligned when fitting A4. */
+  .form-review-pdf-print-page-canvas {
+    position: relative !important;
+    display: inline-block !important;
+    max-width: 100%;
+    max-height: 280mm; /* ~A4 printable height (297mm − margins) */
+    vertical-align: top;
+  }
   .form-review-pdf-print-page img.pdf-page-img {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
-    width: 100%;
-    height: auto;
-    max-width: 100%;
+    width: auto !important;
+    height: auto !important;
+    max-width: 100% !important;
+    max-height: 280mm !important;
+    object-fit: contain !important;
+    object-position: top center;
     position: relative;
     z-index: 0;
   }
-  .form-review-pdf-print-page > .absolute {
-    position: absolute;
+  .form-review-pdf-print-page-canvas > .absolute {
+    position: absolute !important;
+    inset: 0;
     z-index: 1;
     pointer-events: none;
   }
-  .form-review-pdf-print-page .absolute img {
-    max-width: 100%;
-    object-fit: contain;
+  /* Signature field boxes: keep them small on paper even if template % height is large (D-size). */
+  .form-review-pdf-print-signature {
+    max-height: 28mm !important;
+    overflow: hidden !important;
+  }
+  .form-review-pdf-print-signature img,
+  .form-review-pdf-print-sig-img {
+    max-width: 100% !important;
+    max-height: 22mm !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+    object-position: left bottom;
   }
 `
 
