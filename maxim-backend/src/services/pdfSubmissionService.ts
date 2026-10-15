@@ -2295,6 +2295,67 @@ export async function approveSubmission(
   return updated;
 }
 
+export async function bulkApproveSubmissions(
+  userRole: string,
+  submissionIds: string[],
+) {
+  if (!isOwnerOrHr(userRole))
+    throw { status: 403, message: "Only Owner or HR can approve" };
+
+  const ids = [
+    ...new Set(
+      (submissionIds ?? [])
+        .map((id) => {
+          const raw = String(id).trim();
+          return raw.startsWith("pdf:") ? raw.slice(4) : raw;
+        })
+        .filter(Boolean),
+    ),
+  ];
+  if (ids.length === 0) return { approved: 0, skipped: 0 };
+
+  const eligible = await prisma.pdfSubmission.findMany({
+    where: {
+      id: { in: ids },
+      status: { in: ["SUBMITTED", "AWAITING_SIGNATURES"] },
+    },
+    include: { template: { select: { name: true } } },
+  });
+  if (eligible.length === 0) {
+    return { approved: 0, skipped: ids.length };
+  }
+
+  const eligibleIds = eligible.map((s: { id: string }) => s.id);
+  await prisma.pdfSubmission.updateMany({
+    where: {
+      id: { in: eligibleIds },
+      status: { in: ["SUBMITTED", "AWAITING_SIGNATURES"] },
+    },
+    data: { status: "APPROVED" },
+  });
+
+  for (const s of eligible) {
+    schedulePdfQualityFindingRecompute(s.id);
+    if (s.submittedById) {
+      await notificationService
+        .createNotification({
+          userId: s.submittedById,
+          title: "Form approved",
+          body: `Your submission "${s.template?.name ?? "Form"}" has been approved.`,
+          type: "info",
+          linkTo: "/forms",
+          emailPreferenceKey: "forms_pending",
+        })
+        .catch(() => {});
+    }
+  }
+
+  return {
+    approved: eligible.length,
+    skipped: ids.length - eligible.length,
+  };
+}
+
 export async function requestSubmissionResubmission(
   submissionId: string,
   requesterId: string,
