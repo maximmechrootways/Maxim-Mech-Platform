@@ -264,7 +264,7 @@ export function DailyForms() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in" role="dialog" aria-modal="true" onClick={() => setShowAssignModal(false)}>
           <Card padding="lg" className="max-w-md w-full shadow-xl animate-fade-in max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-display font-bold text-xl text-neutral-900 dark:text-white">Assign Form to Team</h2>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Choose a template and team members; the form will appear in their Daily/Monthly/Yearly forms.</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Choose a template and people; the form will appear in their Daily/Monthly/Yearly forms. Any active employee can be selected.</p>
             <div className="mt-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Form Template *</label>
@@ -284,7 +284,7 @@ export function DailyForms() {
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Assign To *</label>
                 <div className="border border-neutral-300 dark:border-neutral-600 rounded-xl p-3 bg-neutral-50 dark:bg-neutral-800/50 max-h-40 overflow-y-auto space-y-2">
                   {teamMembers.length === 0 ? (
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading team…</p>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">No active employees found.</p>
                   ) : (
                     teamMembers.map((m) => (
                       <label key={m.id} className="flex items-center gap-2 cursor-pointer">
@@ -328,7 +328,7 @@ export function DailyForms() {
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Pass To *</label>
                 <div className="border border-neutral-300 dark:border-neutral-600 rounded-xl p-3 bg-neutral-50 dark:bg-neutral-800/50 max-h-40 overflow-y-auto space-y-2">
                   {teamMembers.length === 0 ? (
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading team…</p>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">No active employees found.</p>
                   ) : (
                     teamMembers.map((m) => (
                       <label key={m.id} className="flex items-center gap-2 cursor-pointer">

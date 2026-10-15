@@ -210,13 +210,8 @@ export async function createFormAssignments(
     if (!template.active) throw { status: 400, message: 'Template is not active' }
 
     if (data.signatories && data.signatories.length > 0) {
-        // Sequential signing workflow
-        let allowedSignatories = data.signatories
-        if (isSupervisor && !isOwnerOrHr(userRole)) {
-            const supervisedIds = await jobService.getLabourerIdsSupervisedBy(assignedById)
-            allowedSignatories = data.signatories.filter((s) => supervisedIds.includes(s.userId))
-            if (allowedSignatories.length === 0) throw { status: 403, message: 'You can only assign to people on your team' }
-        }
+        // Sequential signing workflow — supervisors may assign any active user (same as Owner/HR)
+        const allowedSignatories = data.signatories
 
         const newAssignment = await prisma.formAssignment.create({
             data: {
@@ -264,14 +259,9 @@ export async function createFormAssignments(
         return { assigned: 1, userIds: allowedSignatories.map(s => s.userId) }
     }
 
-    // Legacy bulk individual assignments
-    const userIds = data.assignedToUserIds || []
-    let allowedUserIds = userIds
-    if (isSupervisor && !isOwnerOrHr(userRole)) {
-        const supervisedIds = await jobService.getLabourerIdsSupervisedBy(assignedById)
-        allowedUserIds = userIds.filter((id) => supervisedIds.includes(id))
-        if (allowedUserIds.length === 0) throw { status: 403, message: 'You can only assign to people on your team (labourers on your jobs)' }
-    }
+    // Legacy bulk individual assignments — supervisors may assign any active user (same as Owner/HR)
+    const allowedUserIds = data.assignedToUserIds || []
+    if (allowedUserIds.length === 0) throw { status: 400, message: 'Select at least one person to assign' }
 
     const created = await prisma.formAssignment.createMany({
         data: allowedUserIds.map((assignedToUserId) => ({

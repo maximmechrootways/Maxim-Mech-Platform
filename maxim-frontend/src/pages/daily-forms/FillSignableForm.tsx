@@ -250,7 +250,7 @@ export function FillSignableForm({ forceKissMode = false }: { forceKissMode?: bo
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Who must sign (in order: they sign first, then you)</label>
                 <div className="border border-neutral-300 dark:border-neutral-600 rounded-xl p-3 bg-neutral-50 dark:bg-neutral-800/50 max-h-40 overflow-y-auto space-y-2">
                   {teamMembers.length === 0 ? (
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading your team…</p>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">No active employees found.</p>
                   ) : (
                     teamMembers.map((m) => (
                       <label key={m.id} className="flex items-center gap-2 cursor-pointer">
@@ -487,7 +487,7 @@ export function FillSignableForm({ forceKissMode = false }: { forceKissMode?: bo
                   )}
                 </>
               ) : (
-                <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">You have no labourers assigned to your jobs. Assign labourers in <Link to="/jobs" className="text-brand-600 dark:text-brand-400 hover:underline">Job Management</Link> (or as supervisor on a job in My Jobs) to send forms for their signature.</p>
+                <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">No labourers found. Once employees with the labourer role are active in the system, they will appear here for signature.</p>
               )}
             </Card>
           )}

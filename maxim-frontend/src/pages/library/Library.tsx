@@ -3402,12 +3402,12 @@ export function Library() {
               Assign &quot;{assignTemplate?.name}&quot;
             </h2>
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-              Select labourers to assign this form to.
+              Select people to assign this form to. You can choose any active employee.
             </p>
             <div className="max-h-48 overflow-y-auto space-y-2 mb-4">
               {teamMembers.length === 0 ? (
                 <p className="text-sm text-neutral-500">
-                  No team members found.
+                  No active employees found.
                 </p>
               ) : (
                 teamMembers.map((m) => (

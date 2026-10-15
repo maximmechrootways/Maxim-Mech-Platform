@@ -109,24 +109,13 @@ export async function getLabourerIdsSupervisedBy(supervisorUserId: string): Prom
     return [...new Set([...assignments.map((a) => a.userId), ...siteAssignments.map((a) => a.userId)])]
 }
 
-/** Returns team members (id, name) for form assignment. Supervisor = labourers on their jobs; Owner/HR = all active users. */
-export async function getMyTeamMembers(userId: string, userRole: string) {
-    if (userRole === 'supervisor') {
-        const ids = await getLabourerIdsSupervisedBy(userId)
-        if (ids.length === 0) return []
-        const users = await prisma.user.findMany({
-            where: { id: { in: ids }, isActive: true },
-            select: { id: true, firstName: true, lastName: true },
-        })
-        return users.map((u) => ({
-            id: u.id,
-            name: `${u.firstName} ${u.lastName}`.trim() || u.id,
-        }))
-    }
-    if (userRole === 'owner' || userRole === 'hr') {
+/** Returns team members (id, name) for form/task assignment. Supervisor, Owner, and HR all see every active user (no job-roster gate). */
+export async function getMyTeamMembers(_userId: string, userRole: string) {
+    if (userRole === 'supervisor' || userRole === 'owner' || userRole === 'hr') {
         const users = await prisma.user.findMany({
             where: { isActive: true },
             select: { id: true, firstName: true, lastName: true },
+            orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         })
         return users.map((u) => ({
             id: u.id,
