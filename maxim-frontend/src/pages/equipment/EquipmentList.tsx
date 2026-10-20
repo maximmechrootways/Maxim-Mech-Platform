@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { useUser } from "@/contexts/UserContext";
 import { Card, CardHeader, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -12,6 +14,7 @@ import {
 } from "@/api/equipment";
 import { fetchSites, type SiteOption } from "@/api/jobs";
 import { FleetCarInsuranceSection } from "@/pages/equipment/FleetCarInsuranceSection";
+import { downloadCsv } from "@/utils/exportCsv";
 
 const SCHEDULE_LABELS: Record<MaintenanceSchedule, string> = {
   daily: "Daily",
@@ -159,6 +162,92 @@ export function EquipmentList() {
       setSortKey(key);
       setSortDir("asc");
     }
+  };
+
+  const exportRows = useMemo(
+    () =>
+      filtered.map((e) => ({
+        "Equipment Name": e.name,
+        "Model / Serial #":
+          [e.modelNumber, e.serialNumber].filter(Boolean).join(" · ") || "",
+        Tag: e.tag ?? "",
+        Manufacturer: e.manufacturer ?? "",
+        "Job Site / Location": e.site?.name ?? "",
+        Maintenance: SCHEDULE_LABELS[e.maintenanceSchedule] ?? e.maintenanceSchedule,
+      })),
+    [filtered],
+  );
+
+  const handleExportCsv = () => {
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(
+      exportRows,
+      `equipment-identification-${dateStamp}.csv`,
+      [
+        "Equipment Name",
+        "Model / Serial #",
+        "Tag",
+        "Manufacturer",
+        "Job Site / Location",
+        "Maintenance",
+      ],
+    );
+  };
+
+  const handleExportPdf = () => {
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const printedLabel = new Date().toLocaleDateString();
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+    doc.setFontSize(16);
+    doc.setTextColor(17, 17, 17);
+    doc.text("Equipment Identification", 40, 40);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      `Equipment Log · Printed ${printedLabel} · ${exportRows.length} item${exportRows.length === 1 ? "" : "s"}`,
+      40,
+      58,
+    );
+
+    autoTable(doc, {
+      startY: 72,
+      head: [
+        [
+          "Equipment Name",
+          "Model / Serial #",
+          "Tag",
+          "Manufacturer",
+          "Job Site / Location",
+          "Maintenance",
+        ],
+      ],
+      body: exportRows.map((row) => [
+        row["Equipment Name"],
+        row["Model / Serial #"],
+        row.Tag,
+        row.Manufacturer,
+        row["Job Site / Location"],
+        row.Maintenance,
+      ]),
+      styles: {
+        fontSize: 9,
+        cellPadding: 6,
+        textColor: [17, 17, 17],
+        lineColor: [226, 232, 240],
+        lineWidth: 0.5,
+      },
+      headStyles: {
+        fillColor: [248, 250, 252],
+        textColor: [71, 85, 105],
+        fontStyle: "bold",
+      },
+      alternateRowStyles: { fillColor: [255, 255, 255] },
+      margin: { left: 40, right: 40 },
+    });
+
+    doc.save(`equipment-identification-${dateStamp}.pdf`);
   };
 
   const SortIcon = ({ col }: { col: SortKey }) => {
@@ -320,10 +409,34 @@ export function EquipmentList() {
       )}
 
       <Card padding="lg">
-        <CardHeader>Equipment identification</CardHeader>
-        <CardDescription>
-          Sort columns, filter by maintenance schedule, or search.
-        </CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <CardHeader>Equipment identification</CardHeader>
+            <CardDescription>
+              Sort columns, filter by maintenance schedule, or search.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              title="Export CSV"
+              aria-label="Export equipment identification as CSV"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+            >
+              <ExcelIcon />
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              title="Export PDF"
+              aria-label="Export equipment identification as PDF"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-600 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+            >
+              <PdfIcon />
+            </button>
+          </div>
+        </div>
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
           <div className="w-full min-w-0 sm:flex-1 sm:max-w-md">
@@ -488,6 +601,22 @@ function PlusIcon() {
         strokeWidth={2}
         d="M12 4v16m8-8H4"
       />
+    </svg>
+  );
+}
+
+function ExcelIcon() {
+  return (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm0 2.5L17.5 8H14V4.5zM8.5 18l2.2-3.3L8.6 11.5h1.7l1.3 2.1 1.3-2.1h1.6l-2.1 3.2L14.7 18h-1.7l-1.4-2.2L10.2 18H8.5z" />
+    </svg>
+  );
+}
+
+function PdfIcon() {
+  return (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm0 2.5L17.5 8H14V4.5zM8 12.5h1.4c1.1 0 1.9.6 1.9 1.5s-.8 1.5-1.9 1.5H9.1V17H8v-4.5zm1.1 2.1h.3c.4 0 .7-.2.7-.6s-.3-.6-.7-.6h-.3v1.2zM12.2 12.5H14c.9 0 1.5.5 1.5 1.3V17h-1.1v-2.9c0-.3-.2-.5-.5-.5h-.6V17h-1.1v-4.5zm4.3 0h3v1h-1.9v1h1.6v1h-1.6V17h-1.1v-4.5z" />
     </svg>
   );
 }
