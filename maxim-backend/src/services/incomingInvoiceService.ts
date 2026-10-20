@@ -84,6 +84,8 @@ export async function listIncomingInvoices(params: {
     documentType?: string
     paid?: string
     reviewed?: string
+    /** 'yes' = linked to a job; 'no' = missing job */
+    hasJob?: string
     sort?: string
     limit?: number
     offset?: number
@@ -98,6 +100,8 @@ export async function listIncomingInvoices(params: {
     else if (params.paid === 'unpaid') where.paidAt = null
     if (params.reviewed === 'reviewed') where.reviewedAt = { not: null }
     else if (params.reviewed === 'unreviewed') where.reviewedAt = null
+    if (params.hasJob === 'yes') where.jobId = { not: null }
+    else if (params.hasJob === 'no') where.jobId = null
     if (params.vendor) where.vendorName = { contains: params.vendor, mode: 'insensitive' }
     if (params.q) {
         where.OR = [

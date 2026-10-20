@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { IncomingInvoiceAttachmentActions } from '@/components/invoices/IncomingInvoiceAttachmentActions'
 import { Input } from '@/components/ui/Input'
 import { formatAxiosError } from '@/api'
@@ -23,6 +24,8 @@ import { fetchJobs, type JobListItem } from '@/api/jobs'
 
 const PAGE = 40
 
+type QueuePreset = 'all' | 'needs_attention' | 'unpaid' | 'this_month' | 'missing_job'
+
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   try {
@@ -32,6 +35,19 @@ function formatDateTime(iso: string | null | undefined): string {
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
+    })
+  } catch {
+    return '—'
+  }
+}
+
+function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
     })
   } catch {
     return '—'
@@ -64,6 +80,24 @@ function formatMoney(amount: string | null, currency: string | null): string {
   }
 }
 
+function startOfMonthIso(): string {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
+}
+
+function endOfMonthIso(): string {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999).toISOString()
+}
+
+const PRESETS: { id: QueuePreset; label: string; hint: string }[] = [
+  { id: 'all', label: 'All', hint: 'Everything' },
+  { id: 'needs_attention', label: 'Needs review', hint: 'Not reviewed yet' },
+  { id: 'unpaid', label: 'Unpaid', hint: 'Awaiting payment' },
+  { id: 'this_month', label: 'This month', hint: 'Received this month' },
+  { id: 'missing_job', label: 'Missing job', hint: 'No job linked' },
+]
+
 export function IncomingInvoicesList() {
   const { authReady } = useAuth()
   const { user } = useUser()
@@ -75,11 +109,15 @@ export function IncomingInvoicesList() {
   const [error, setError] = useState<string | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [vendor, setVendor] = useState('')
   const [sort, setSort] = useState('received')
   const [documentType, setDocumentType] = useState('')
   const [paidFilter, setPaidFilter] = useState('')
-  const [reviewedFilter, setReviewedFilter] = useState('')
+  const [reviewedFilter, setReviewedFilter] = useState('unreviewed')
+  const [hasJobFilter, setHasJobFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  /** Default queue: unreviewed items first (daily AP work). */
+  const [preset, setPreset] = useState<QueuePreset>('needs_attention')
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [showManualForm, setShowManualForm] = useState(false)
@@ -89,9 +127,12 @@ export function IncomingInvoicesList() {
   const [editingTitle, setEditingTitle] = useState('')
   const [jobs, setJobs] = useState<JobListItem[]>([])
   const [updatingRowId, setUpdatingRowId] = useState<string | null>(null)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
 
   function openEdit(row: IncomingInvoiceListRow) {
+    setMenuOpenId(null)
     setEditingId(row.id)
     setEditingTitle(row.vendorName || row.invoiceNumber || row.emailSubject || 'Invoice')
   }
@@ -120,6 +161,22 @@ export function IncomingInvoicesList() {
     )))
   }
 
+  function applyPreset(next: QueuePreset) {
+    setPreset(next)
+    setOffset(0)
+    setPaidFilter('')
+    setReviewedFilter('')
+    setHasJobFilter('')
+    setDateFrom('')
+    setDateTo('')
+    if (next === 'needs_attention') setReviewedFilter('unreviewed')
+    else if (next === 'unpaid') setPaidFilter('unpaid')
+    else if (next === 'this_month') {
+      setDateFrom(startOfMonthIso())
+      setDateTo(endOfMonthIso())
+    } else if (next === 'missing_job') setHasJobFilter('no')
+  }
+
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
     searchDebounceRef.current = setTimeout(() => {
@@ -140,6 +197,15 @@ export function IncomingInvoicesList() {
   }, [authReady])
 
   useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!menuRef.current) return
+      if (!menuRef.current.contains(e.target as Node)) setMenuOpenId(null)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  useEffect(() => {
     if (!authReady) return
     let cancelled = false
     setLoading(true)
@@ -147,11 +213,13 @@ export function IncomingInvoicesList() {
     Promise.all([
       fetchIncomingInvoices({
         q: search || undefined,
-        vendor: vendor.trim() || undefined,
         sort: sort === 'received' ? undefined : sort,
         documentType: documentType || undefined,
         paid: paidFilter || undefined,
         reviewed: reviewedFilter || undefined,
+        hasJob: hasJobFilter || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
         limit: PAGE,
         offset,
       }),
@@ -171,7 +239,19 @@ export function IncomingInvoicesList() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [authReady, search, vendor, sort, documentType, paidFilter, reviewedFilter, offset, reloadNonce])
+  }, [
+    authReady,
+    search,
+    sort,
+    documentType,
+    paidFilter,
+    reviewedFilter,
+    hasJobFilter,
+    dateFrom,
+    dateTo,
+    offset,
+    reloadNonce,
+  ])
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE))
   const currentPage = Math.floor(offset / PAGE) + 1
@@ -234,6 +314,7 @@ export function IncomingInvoicesList() {
   }
 
   async function handleDelete(row: IncomingInvoiceListRow) {
+    setMenuOpenId(null)
     const label = row.vendorName || row.invoiceNumber || row.emailSubject || 'this invoice'
     if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return
     setDeletingId(row.id)
@@ -269,13 +350,7 @@ export function IncomingInvoicesList() {
       ].filter(Boolean)
       setSyncMessage(parts.join(', ') + '.')
       setOffset(0)
-      const [list, summaryData] = await Promise.all([
-        fetchIncomingInvoices({ q: search || undefined, vendor: vendor.trim() || undefined, limit: PAGE, offset: 0 }),
-        fetchIncomingInvoicesSummary(),
-      ])
-      setRows(list.rows)
-      setTotal(list.total)
-      setSummary(summaryData)
+      setReloadNonce((n) => n + 1)
     } catch (e: any) {
       setError(e?.response?.data?.error || e?.message || 'Sync failed.')
     } finally {
@@ -288,8 +363,8 @@ export function IncomingInvoicesList() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display font-bold text-display-xl text-foreground">Incoming Invoices</h1>
-          <p className="text-muted-foreground mt-1">
-            Invoices received at accounting@maximmech.com, extracted from email and PDF attachments.
+          <p className="text-muted-foreground mt-1 max-w-2xl">
+            Review inbox invoices, mark paid, and link them to jobs — without the spreadsheet clutter.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -317,234 +392,418 @@ export function IncomingInvoicesList() {
       {syncMessage && <p className="text-sm text-muted-foreground">{syncMessage}</p>}
 
       {summary && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card><CardHeader><CardDescription>Total invoices</CardDescription><p className="text-2xl font-semibold">{summary.total}</p></CardHeader></Card>
-          <Card><CardHeader><CardDescription>This month</CardDescription><p className="text-2xl font-semibold">{summary.thisMonth}</p></CardHeader></Card>
-          <Card className={summary.failedJobs > 0 ? 'border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-950/20' : undefined}>
-            <CardHeader>
-              <CardDescription className={summary.failedJobs > 0 ? 'text-red-700 dark:text-red-300' : undefined}>
-                Failed jobs
-              </CardDescription>
-              <p className={`text-2xl font-semibold ${summary.failedJobs > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
-                {summary.failedJobs}
-              </p>
-              {summary.failedJobs > 0 && (
-                <p className="mt-2 text-sm text-red-700 dark:text-red-300">
-                  Check the inbox email for any missed invoices.
-                </p>
-              )}
-            </CardHeader>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => applyPreset('all')}
+            className={`text-left rounded-2xl border px-4 py-3 transition ${
+              preset === 'all'
+                ? 'border-brand-400 bg-brand-50/60 dark:bg-brand-950/30'
+                : 'border-border bg-card hover:bg-muted/40'
+            }`}
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</p>
+            <p className="mt-1 text-2xl font-semibold text-foreground">{summary.total}</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPreset('this_month')}
+            className={`text-left rounded-2xl border px-4 py-3 transition ${
+              preset === 'this_month'
+                ? 'border-brand-400 bg-brand-50/60 dark:bg-brand-950/30'
+                : 'border-border bg-card hover:bg-muted/40'
+            }`}
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">This month</p>
+            <p className="mt-1 text-2xl font-semibold text-foreground">{summary.thisMonth}</p>
+          </button>
+          <div
+            className={`rounded-2xl border px-4 py-3 ${
+              summary.failedJobs > 0
+                ? 'border-red-300 bg-red-50/40 dark:border-red-800 dark:bg-red-950/20'
+                : 'border-border bg-card'
+            }`}
+          >
+            <p className={`text-xs font-medium uppercase tracking-wide ${summary.failedJobs > 0 ? 'text-red-700 dark:text-red-300' : 'text-muted-foreground'}`}>
+              Failed sync jobs
+            </p>
+            <p className={`mt-1 text-2xl font-semibold ${summary.failedJobs > 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>
+              {summary.failedJobs}
+            </p>
+            {summary.failedJobs > 0 && (
+              <p className="mt-1 text-xs text-red-700 dark:text-red-300">Check inbox for missed invoices, then Sync inbox.</p>
+            )}
+          </div>
         </div>
       )}
 
       <Card>
-        <CardHeader>
-          <div className="flex flex-wrap gap-3">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
             <Input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search vendor, invoice #, PO, subject, notes…"
-              className="min-w-[240px] flex-1"
+              className="min-w-[200px] w-[min(100%,280px)] shrink-0"
+              aria-label="Search invoices"
             />
-            <Input
-              value={vendor}
-              onChange={(e) => { setVendor(e.target.value); setOffset(0) }}
-              placeholder="Vendor filter"
-              className="min-w-[180px]"
-            />
-            <select
-              value={documentType}
-              onChange={(e) => { setDocumentType(e.target.value); setOffset(0) }}
-              className="min-h-[40px] rounded-xl border border-border bg-background px-3 text-sm"
-              aria-label="Filter by document type"
-            >
-              <option value="">All types</option>
-              <option value="INVOICE">Invoices only</option>
-              <option value="RECEIPT">Receipts only</option>
-              <option value="STATEMENT">Statements only</option>
-            </select>
-            <select
-              value={paidFilter}
-              onChange={(e) => { setPaidFilter(e.target.value); setOffset(0) }}
-              className="min-h-[40px] rounded-xl border border-border bg-background px-3 text-sm"
-              aria-label="Filter by paid status"
-            >
-              <option value="">All paid status</option>
-              <option value="paid">Paid</option>
-              <option value="unpaid">Unpaid</option>
-            </select>
-            <select
-              value={reviewedFilter}
-              onChange={(e) => { setReviewedFilter(e.target.value); setOffset(0) }}
-              className="min-h-[40px] rounded-xl border border-border bg-background px-3 text-sm"
-              aria-label="Filter by reviewed status"
-            >
-              <option value="">All review status</option>
-              <option value="reviewed">Reviewed</option>
-              <option value="unreviewed">Unreviewed</option>
-            </select>
-            <select
-              value={sort}
-              onChange={(e) => { setSort(e.target.value); setOffset(0) }}
-              className="min-h-[40px] rounded-xl border border-border bg-background px-3 text-sm"
-              aria-label="Sort invoices"
-            >
-              <option value="received">Sort: received date</option>
-              <option value="vendor">Sort: vendor</option>
-              <option value="total">Sort: total</option>
-              <option value="invoiceDate">Sort: invoice date</option>
-            </select>
+            <div className="ml-auto flex flex-nowrap items-center gap-2 shrink-0" role="tablist" aria-label="Invoice queues and filters">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={preset === p.id}
+                  title={p.hint}
+                  onClick={() => applyPreset(p.id)}
+                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                    preset === p.id
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+              <select
+                value={documentType}
+                onChange={(e) => { setDocumentType(e.target.value); setOffset(0) }}
+                className="min-h-[36px] rounded-xl border border-border bg-background px-3 text-sm whitespace-nowrap"
+                aria-label="Filter by document type"
+              >
+                <option value="">All types</option>
+                <option value="INVOICE">Invoices only</option>
+                <option value="RECEIPT">Receipts only</option>
+                <option value="STATEMENT">Statements only</option>
+              </select>
+              <select
+                value={sort}
+                onChange={(e) => { setSort(e.target.value); setOffset(0) }}
+                className="min-h-[36px] rounded-xl border border-border bg-background px-3 text-sm whitespace-nowrap"
+                aria-label="Sort invoices"
+              >
+                <option value="received">Sort: received</option>
+                <option value="vendor">Sort: vendor</option>
+                <option value="total">Sort: total</option>
+                <option value="invoiceDate">Sort: invoice date</option>
+              </select>
+            </div>
           </div>
+
+          <CardDescription>
+            Showing {total} {total === 1 ? 'document' : 'documents'}
+            {preset !== 'all' ? ` · ${PRESETS.find((p) => p.id === preset)?.label}` : ''}
+          </CardDescription>
         </CardHeader>
 
         {error && <p className="px-6 pb-4 text-sm text-red-600">{error}</p>}
+
         {loading ? (
           <p className="px-6 pb-6 text-muted-foreground">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="px-6 pb-6 text-muted-foreground">No incoming invoices yet.</p>
+          <EmptyState
+            title="No invoices in this queue"
+            description={
+              preset === 'needs_attention'
+                ? 'Nothing left to review. Try All or Unpaid.'
+                : 'Try another queue, clear filters, or sync the inbox.'
+            }
+            compact
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-t border-border text-left text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Paid Status</th>
-                  <th className="px-3 py-3 font-medium">Reviewed</th>
-                  <th className="px-3 py-3 font-medium">Type</th>
-                  <th className="px-3 py-3 font-medium">Received</th>
-                  <th className="px-3 py-3 font-medium">Vendor</th>
-                  <th className="px-3 py-3 font-medium">Invoice #</th>
-                  <th className="px-3 py-3 font-medium">Total</th>
-                  <th className="px-3 py-3 font-medium">PO</th>
-                  <th className="px-3 py-3 font-medium">Job</th>
-                  <th className="px-3 py-3 font-medium">Subject</th>
-                  <th className="px-3 py-3 font-medium">Notes</th>
-                  <th className="px-3 py-3 font-medium">PDF</th>
-                  <th className="px-3 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t border-border hover:bg-muted/40">
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <select
-                        value={row.paidAt ? 'paid' : 'unpaid'}
-                        disabled={updatingRowId === row.id}
-                        onChange={(e) => void handlePaidChange(row, e.target.value === 'paid')}
-                        className="min-h-[32px] rounded-lg border border-border bg-background px-2 text-sm"
-                        aria-label={`Paid status for ${row.vendorName || row.invoiceNumber || 'invoice'}`}
-                      >
-                        <option value="unpaid">Unpaid</option>
-                        <option value="paid">Paid</option>
-                      </select>
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      <label className="flex items-start gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-border"
-                          checked={Boolean(row.reviewedAt)}
-                          disabled={updatingRowId === row.id}
-                          onChange={(e) => void handleReviewedChange(row, e.target.checked)}
-                          aria-label={`Mark ${row.vendorName || row.invoiceNumber || 'invoice'} as reviewed`}
-                        />
-                        <span className="text-xs leading-snug text-muted-foreground">
-                          {row.reviewedAt
-                            ? `Reviewed By: ${row.reviewedByName || user?.name || '—'}`
-                            : 'Mark reviewed'}
-                        </span>
-                      </label>
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      <Badge variant={documentTypeBadgeVariant(row.documentType)}>
-                        {documentTypeLabel(row.documentType)}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">{formatDateTime(row.receivedAt)}</td>
-                    <td className="px-3 py-3">{row.vendorName || '—'}</td>
-                    <td className="px-3 py-3">
-                      <Link to={`/incoming-invoices/${row.id}`} className="text-primary hover:underline">
-                        {row.invoiceNumber || 'View'}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">{formatMoney(row.totalAmount, row.currency)}</td>
-                    <td className="px-3 py-3">{row.poNumber || '—'}</td>
-                    <td className="px-3 py-3 min-w-[160px]">
-                      <select
-                        value={row.jobId || ''}
-                        disabled={updatingRowId === row.id}
-                        onChange={(e) => void handleJobChange(row, e.target.value)}
-                        className="w-full min-h-[32px] rounded-lg border border-border bg-background px-2 text-sm"
-                        aria-label={`Job for ${row.vendorName || row.invoiceNumber || 'invoice'}`}
-                      >
-                        <option value="">— Select job —</option>
-                        {jobs.map((job) => (
-                          <option key={job.id} value={job.id}>
-                            {job.title}{job.siteName ? ` (${job.siteName})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-3 py-3 max-w-[240px] truncate">{row.emailSubject || '—'}</td>
-                    <td className="px-3 py-3 max-w-[180px]">
-                      {row.notes ? (
-                        <button
-                          type="button"
-                          className="line-clamp-2 text-left text-sm text-foreground hover:text-primary hover:underline"
-                          title={row.notes}
-                          onClick={() => openEdit(row)}
+          <>
+            {/* Mobile cards */}
+            <ul className="md:hidden divide-y divide-border">
+              {rows.map((row) => {
+                const paid = Boolean(row.paidAt)
+                const reviewed = Boolean(row.reviewedAt)
+                const busy = updatingRowId === row.id
+                const firstAttachment = row.attachments?.[0]
+                return (
+                  <li key={row.id} className="px-4 py-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link
+                          to={`/incoming-invoices/${row.id}`}
+                          className="font-medium text-foreground hover:text-primary line-clamp-1"
                         >
-                          {row.notes}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-sm text-muted-foreground hover:text-primary hover:underline"
-                          onClick={() => openEdit(row)}
-                        >
-                          Add note…
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-3 py-3">
-                      {row.attachments?.length ? (
-                        <div className="space-y-2">
-                          {row.attachments.map((attachment) => (
-                            <IncomingInvoiceAttachmentActions
-                              key={attachment.id}
-                              invoiceId={row.id}
-                              attachmentId={attachment.id}
-                              fileName={attachment.originalName || 'invoice.pdf'}
-                              prefetch={false}
-                            />
-                          ))}
+                          {row.vendorName || row.emailSubject || 'Untitled'}
+                        </Link>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {row.invoiceNumber ? `#${row.invoiceNumber}` : 'No invoice #'} · {formatShortDate(row.receivedAt)}
+                        </p>
+                        <div className="mt-2">
+                          <Badge variant={documentTypeBadgeVariant(row.documentType)}>
+                            {documentTypeLabel(row.documentType)}
+                          </Badge>
                         </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => openEdit(row)}>
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="border-red-200 text-red-700"
-                          disabled={deletingId === row.id}
-                          onClick={() => void handleDelete(row)}
-                        >
-                          {deletingId === row.id ? 'Deleting…' : 'Delete'}
-                        </Button>
                       </div>
-                    </td>
+                      <p className="shrink-0 text-sm font-semibold tabular-nums">
+                        {formatMoney(row.totalAmount, row.currency)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handlePaidChange(row, !paid)}
+                        className={`rounded-full px-3 py-1 text-xs font-medium border transition ${
+                          paid
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                            : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {paid ? 'Paid' : 'Unpaid'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleReviewedChange(row, !reviewed)}
+                        className={`rounded-full px-3 py-1 text-xs font-medium border transition ${
+                          reviewed
+                            ? 'border-brand-300 bg-brand-50 text-brand-800 dark:border-brand-800 dark:bg-brand-950/40 dark:text-brand-300'
+                            : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {reviewed ? `Reviewed${row.reviewedByName ? ` · ${row.reviewedByName}` : ''}` : 'Mark reviewed'}
+                      </button>
+                    </div>
+
+                    <select
+                      value={row.jobId || ''}
+                      disabled={busy}
+                      onChange={(e) => void handleJobChange(row, e.target.value)}
+                      className="w-full min-h-[36px] rounded-lg border border-border bg-background px-2 text-sm"
+                      aria-label={`Job for ${row.vendorName || row.invoiceNumber || 'invoice'}`}
+                    >
+                      <option value="">— Select job —</option>
+                      {jobs.map((job) => (
+                        <option key={job.id} value={job.id}>
+                          {job.title}{job.siteName ? ` (${job.siteName})` : ''}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Link to={`/incoming-invoices/${row.id}`}>
+                        <Button type="button" size="sm" variant="secondary">Open</Button>
+                      </Link>
+                      {firstAttachment && (
+                        <IncomingInvoiceAttachmentActions
+                          invoiceId={row.id}
+                          attachmentId={firstAttachment.id}
+                          fileName={firstAttachment.originalName || 'invoice.pdf'}
+                          size="sm"
+                          compact
+                          prefetch={false}
+                        />
+                      )}
+                      <Button type="button" size="sm" variant="outline" onClick={() => openEdit(row)}>Edit</Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="border-red-200 text-red-700"
+                        disabled={deletingId === row.id}
+                        onClick={() => void handleDelete(row)}
+                      >
+                        {deletingId === row.id ? 'Deleting…' : 'Delete'}
+                      </Button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-t border-border text-left text-muted-foreground">
+                    <th className="px-4 py-3 font-medium">Document</th>
+                    <th className="px-3 py-3 font-medium">Amount</th>
+                    <th className="px-3 py-3 font-medium">Received</th>
+                    <th className="px-3 py-3 font-medium">Status</th>
+                    <th className="px-3 py-3 font-medium min-w-[160px]">Job</th>
+                    <th className="px-3 py-3 font-medium text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const paid = Boolean(row.paidAt)
+                    const reviewed = Boolean(row.reviewedAt)
+                    const busy = updatingRowId === row.id
+                    const firstAttachment = row.attachments?.[0]
+                    const attachmentCount = row.attachments?.length ?? 0
+                    return (
+                      <tr key={row.id} className="border-t border-border hover:bg-muted/40 align-top">
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <Badge variant={documentTypeBadgeVariant(row.documentType)}>
+                              {documentTypeLabel(row.documentType)}
+                            </Badge>
+                            {row.notes && (
+                              <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline"
+                                onClick={() => openEdit(row)}
+                                title={row.notes}
+                              >
+                                Has note
+                              </button>
+                            )}
+                          </div>
+                          <Link
+                            to={`/incoming-invoices/${row.id}`}
+                            className="font-medium text-foreground hover:text-primary"
+                          >
+                            {row.vendorName || 'Unknown vendor'}
+                          </Link>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {row.invoiceNumber ? (
+                              <>Invoice #{row.invoiceNumber}</>
+                            ) : (
+                              'No invoice #'
+                            )}
+                            {row.poNumber ? ` · PO ${row.poNumber}` : ''}
+                          </p>
+                          {row.emailSubject && (
+                            <p className="mt-1 text-xs text-muted-foreground line-clamp-1 max-w-[320px]" title={row.emailSubject}>
+                              {row.emailSubject}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap font-semibold tabular-nums">
+                          {formatMoney(row.totalAmount, row.currency)}
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
+                          {formatDateTime(row.receivedAt)}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1.5 items-start">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handlePaidChange(row, !paid)}
+                              className={`rounded-full px-2.5 py-1 text-xs font-medium border transition ${
+                                paid
+                                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                  : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                              }`}
+                              aria-pressed={paid}
+                              aria-label={`Toggle paid for ${row.vendorName || row.invoiceNumber || 'invoice'}`}
+                            >
+                              {paid ? 'Paid' : 'Unpaid'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handleReviewedChange(row, !reviewed)}
+                              className={`rounded-full px-2.5 py-1 text-xs font-medium border transition ${
+                                reviewed
+                                  ? 'border-brand-300 bg-brand-50 text-brand-800 dark:border-brand-800 dark:bg-brand-950/40 dark:text-brand-300'
+                                  : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                              }`}
+                              aria-pressed={reviewed}
+                              aria-label={`Toggle reviewed for ${row.vendorName || row.invoiceNumber || 'invoice'}`}
+                              title={reviewed && row.reviewedByName ? `Reviewed by ${row.reviewedByName}` : undefined}
+                            >
+                              {reviewed ? 'Reviewed' : 'Unreviewed'}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <select
+                            value={row.jobId || ''}
+                            disabled={busy}
+                            onChange={(e) => void handleJobChange(row, e.target.value)}
+                            className="w-full min-h-[32px] rounded-lg border border-border bg-background px-2 text-sm"
+                            aria-label={`Job for ${row.vendorName || row.invoiceNumber || 'invoice'}`}
+                          >
+                            <option value="">— Select job —</option>
+                            {jobs.map((job) => (
+                              <option key={job.id} value={job.id}>
+                                {job.title}{job.siteName ? ` (${job.siteName})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap items-center justify-end gap-2 relative" ref={menuOpenId === row.id ? menuRef : undefined}>
+                            <Link to={`/incoming-invoices/${row.id}`}>
+                              <Button type="button" size="sm" variant="secondary">Open</Button>
+                            </Link>
+                            {firstAttachment ? (
+                              <IncomingInvoiceAttachmentActions
+                                invoiceId={row.id}
+                                attachmentId={firstAttachment.id}
+                                fileName={firstAttachment.originalName || 'invoice.pdf'}
+                                size="sm"
+                                compact
+                                prefetch={false}
+                              />
+                            ) : (
+                              <span className="text-xs text-muted-foreground px-1">No PDF</span>
+                            )}
+                            {attachmentCount > 1 && (
+                              <span className="text-xs text-muted-foreground">+{attachmentCount - 1}</span>
+                            )}
+                            <div className="relative">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                aria-haspopup="menu"
+                                aria-expanded={menuOpenId === row.id}
+                                onClick={() => setMenuOpenId((id) => (id === row.id ? null : row.id))}
+                              >
+                                More
+                              </Button>
+                              {menuOpenId === row.id && (
+                                <div
+                                  role="menu"
+                                  className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-border bg-card shadow-lg py-1"
+                                >
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted/60"
+                                    onClick={() => openEdit(row)}
+                                  >
+                                    Edit details
+                                  </button>
+                                  {!row.notes && (
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      className="w-full px-3 py-2 text-left text-sm hover:bg-muted/60"
+                                      onClick={() => openEdit(row)}
+                                    >
+                                      Add note
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="w-full px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                    disabled={deletingId === row.id}
+                                    onClick={() => void handleDelete(row)}
+                                  >
+                                    {deletingId === row.id ? 'Deleting…' : 'Delete'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {!loading && total > PAGE && (

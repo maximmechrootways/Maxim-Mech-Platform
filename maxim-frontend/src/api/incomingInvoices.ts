@@ -128,6 +128,7 @@ export async function fetchIncomingInvoices(params?: {
   documentType?: string
   paid?: string
   reviewed?: string
+  hasJob?: string
   sort?: string
   limit?: number
   offset?: number

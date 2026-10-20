@@ -16,9 +16,29 @@ import {
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    return new Date(iso).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
   } catch {
     return '—'
+  }
+}
+
+function formatMoney(amount: string | null, currency: string | null): string {
+  if (!amount) return '—'
+  const num = Number(amount)
+  if (!Number.isFinite(num)) return amount
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency || 'CAD',
+    }).format(num)
+  } catch {
+    return `${amount} ${currency || ''}`.trim()
   }
 }
 
@@ -39,6 +59,8 @@ export function IncomingInvoiceDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [showAiJson, setShowAiJson] = useState(false)
+
   useEffect(() => {
     if (!id || !authReady) return
     let cancelled = false
@@ -70,10 +92,12 @@ export function IncomingInvoiceDetail() {
   }
 
   if (loading) return <p className="text-muted-foreground">Loading…</p>
-  if (error) return <p className="text-red-600">{error}</p>
+  if (error && !invoice) return <p className="text-red-600">{error}</p>
   if (!invoice) return <p className="text-muted-foreground">Invoice not found.</p>
 
   const extracted = invoice.extractedData as Record<string, unknown> | null
+  const paid = Boolean(invoice.paidAt)
+  const reviewed = Boolean(invoice.reviewedAt)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -87,8 +111,24 @@ export function IncomingInvoiceDetail() {
             <Badge variant={invoice.documentType === 'RECEIPT' ? 'success' : invoice.documentType === 'STATEMENT' ? 'info' : 'default'}>
               {invoice.documentType === 'RECEIPT' ? 'Receipt' : invoice.documentType === 'STATEMENT' ? 'Statement' : 'Invoice'}
             </Badge>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
+              paid
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'border-border text-muted-foreground'
+            }`}>
+              {paid ? 'Paid' : 'Unpaid'}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
+              reviewed
+                ? 'border-brand-300 bg-brand-50 text-brand-800 dark:border-brand-800 dark:bg-brand-950/40 dark:text-brand-300'
+                : 'border-border text-muted-foreground'
+            }`}>
+              {reviewed
+                ? `Reviewed${invoice.reviewedByName ? ` · ${invoice.reviewedByName}` : ''}`
+                : 'Unreviewed'}
+            </span>
             {invoice.invoiceNumber && (
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 {invoice.documentType === 'RECEIPT' ? 'Paid invoice' : 'Invoice'} #{invoice.invoiceNumber}
               </p>
             )}
@@ -98,6 +138,9 @@ export function IncomingInvoiceDetail() {
               </Link>
             )}
           </div>
+          <p className="mt-3 text-2xl font-semibold tabular-nums text-foreground">
+            {formatMoney(invoice.totalAmount, invoice.currency)}
+          </p>
         </div>
         <Button
           type="button"
@@ -110,20 +153,36 @@ export function IncomingInvoiceDetail() {
         </Button>
       </div>
 
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
       <Card>
         <CardHeader>
-          <CardDescription>Email</CardDescription>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="From" value={invoice.emailFrom} />
-            <Field label="To" value={invoice.emailTo} />
-            <Field label="Received" value={formatDate(invoice.receivedAt)} />
-            <Field label="Subject" value={invoice.emailSubject} />
-          </dl>
-          {invoice.emailBodyText && (
-            <div className="mt-4 rounded-xl border border-border bg-muted/20 p-4 text-sm whitespace-pre-wrap">
-              {invoice.emailBodyText}
-            </div>
-          )}
+          <CardDescription>PDF attachments</CardDescription>
+          <div className="mt-4 space-y-3">
+            {invoice.attachments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No attachments.</p>
+            ) : (
+              invoice.attachments.map((attachment) => (
+                <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4">
+                  <div>
+                    <p className="font-medium">{attachment.originalName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {attachment.sizeBytes ? `${Math.round(attachment.sizeBytes / 1024)} KB` : 'File'}
+                    </p>
+                  </div>
+                  {id && (
+                    <IncomingInvoiceAttachmentActions
+                      invoiceId={id}
+                      attachmentId={attachment.id}
+                      fileName={attachment.originalName || 'invoice.pdf'}
+                      size="md"
+                      prefetch={false}
+                    />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </CardHeader>
       </Card>
 
@@ -138,41 +197,46 @@ export function IncomingInvoiceDetail() {
 
       <Card>
         <CardHeader>
-          <CardDescription>PDF attachments</CardDescription>
-          <div className="mt-4 space-y-3">
-            {invoice.attachments.map((attachment) => (
-              <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4">
-                <div>
-                  <p className="font-medium">{attachment.originalName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {attachment.sizeBytes ? `${Math.round(attachment.sizeBytes / 1024)} KB` : 'PDF'}
-                  </p>
-                </div>
-                {id && (
-                  <IncomingInvoiceAttachmentActions
-                    invoiceId={id}
-                    attachmentId={attachment.id}
-                    fileName={attachment.originalName || 'invoice.pdf'}
-                    size="md"
-                    prefetch={false}
-                  />
-                )}
+          <CardDescription>Email</CardDescription>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="From" value={invoice.emailFrom} />
+            <Field label="To" value={invoice.emailTo} />
+            <Field label="Received" value={formatDate(invoice.receivedAt)} />
+            <Field label="Subject" value={invoice.emailSubject} />
+          </dl>
+          {invoice.emailBodyText && (
+            <details className="mt-4">
+              <summary className="cursor-pointer text-sm font-medium text-foreground">Email body</summary>
+              <div className="mt-3 rounded-xl border border-border bg-muted/20 p-4 text-sm whitespace-pre-wrap">
+                {invoice.emailBodyText}
               </div>
-            ))}
-          </div>
+            </details>
+          )}
         </CardHeader>
       </Card>
 
       {extracted && (
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <CardDescription>Full AI extraction</CardDescription>
-              <Badge variant="info">JSON</Badge>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CardDescription>Advanced</CardDescription>
+                <Badge variant="info">AI extraction</Badge>
+              </div>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setShowAiJson((v) => !v)}>
+                {showAiJson ? 'Hide JSON' : 'Show raw JSON'}
+              </Button>
             </div>
-            <pre className="mt-4 overflow-x-auto rounded-xl border border-border bg-muted/20 p-4 text-xs">
-              {JSON.stringify(extracted, null, 2)}
-            </pre>
+            {showAiJson && (
+              <pre className="mt-4 overflow-x-auto rounded-xl border border-border bg-muted/20 p-4 text-xs">
+                {JSON.stringify(extracted, null, 2)}
+              </pre>
+            )}
+            {!showAiJson && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Raw AI extraction is hidden by default. Open it only when debugging field mapping.
+              </p>
+            )}
           </CardHeader>
         </Card>
       )}

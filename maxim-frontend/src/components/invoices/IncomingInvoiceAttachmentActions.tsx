@@ -11,6 +11,8 @@ type Props = {
   fileName: string
   size?: 'sm' | 'md' | 'lg'
   prefetch?: boolean
+  /** Single primary button (Open PDF) instead of Open + Download */
+  compact?: boolean
 }
 
 function escapeHtml(s: string): string {
@@ -27,6 +29,7 @@ export function IncomingInvoiceAttachmentActions({
   fileName,
   size = 'sm',
   prefetch = false,
+  compact = false,
 }: Props) {
   const { authReady } = useAuth()
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null)
@@ -129,6 +132,21 @@ export function IncomingInvoiceAttachmentActions({
           Retry
         </Button>
       </div>
+    )
+  }
+
+  if (compact) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size={size}
+        disabled={loading}
+        onClick={() => void handleOpenInNewTab()}
+        title={fileName}
+      >
+        {loading ? 'Loading…' : 'PDF'}
+      </Button>
     )
   }
 
