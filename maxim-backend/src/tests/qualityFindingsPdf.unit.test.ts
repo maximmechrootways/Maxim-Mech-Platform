@@ -1,6 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { detectPdfChecklistSubstandard, normalizeChecklistValueForFinding } from '../services/qualityFindings/detectPdfSubmission'
+import {
+  detectPdfChecklistSubstandard,
+  normalizeChecklistValueForFinding,
+  normalizeStandardsChecklistChoiceForAutoApprove,
+  shouldAutoApproveStandardsChecklist,
+} from '../services/qualityFindings/detectPdfSubmission'
 
 test('normalizeChecklistValueForFinding only substandard', () => {
   assert.equal(normalizeChecklistValueForFinding('substandard'), 'substandard')
@@ -117,4 +122,85 @@ test('detectPdfChecklistSubstandard does not treat plain CHECKBOX no as finding 
     fieldValues: { x: 'no' },
   })
   assert.equal(out.length, 0)
+})
+
+test('normalizeStandardsChecklistChoiceForAutoApprove maps pass/fail/blank', () => {
+  assert.equal(normalizeStandardsChecklistChoiceForAutoApprove('standard'), 'standard')
+  assert.equal(normalizeStandardsChecklistChoiceForAutoApprove('true'), 'standard')
+  assert.equal(normalizeStandardsChecklistChoiceForAutoApprove('na'), 'na')
+  assert.equal(normalizeStandardsChecklistChoiceForAutoApprove('N/A'), 'na')
+  assert.equal(normalizeStandardsChecklistChoiceForAutoApprove(''), 'blank')
+  assert.equal(normalizeStandardsChecklistChoiceForAutoApprove('substandard'), 'fail')
+  assert.equal(normalizeStandardsChecklistChoiceForAutoApprove('no'), 'fail')
+  assert.equal(normalizeStandardsChecklistChoiceForAutoApprove('yes'), 'fail')
+})
+
+test('shouldAutoApproveStandardsChecklist approves when all standard or na', () => {
+  const fields = [
+    { id: 'a', type: 'CHECKBOX', label: 'Item A' },
+    { id: 'b', type: 'CHECKBOX', label: 'Item B' },
+    { id: 't', type: 'TEXT', label: 'Note' },
+  ]
+  assert.equal(
+    shouldAutoApproveStandardsChecklist({
+      templateName: 'Fall Arrest Inspection Checklist',
+      fields,
+      fieldValues: { a: 'standard', b: 'na', t: 'anything' },
+    }),
+    true
+  )
+})
+
+test('shouldAutoApproveStandardsChecklist rejects substandard or blank', () => {
+  const fields = [
+    { id: 'a', type: 'CHECKBOX', label: 'Item A' },
+    { id: 'b', type: 'CHECKBOX', label: 'Item B' },
+  ]
+  assert.equal(
+    shouldAutoApproveStandardsChecklist({
+      templateName: 'Fall Arrest Inspection Checklist',
+      fields,
+      fieldValues: { a: 'standard', b: 'substandard' },
+    }),
+    false
+  )
+  assert.equal(
+    shouldAutoApproveStandardsChecklist({
+      templateName: 'Fall Arrest Inspection Checklist',
+      fields,
+      fieldValues: { a: 'standard', b: '' },
+    }),
+    false
+  )
+})
+
+test('shouldAutoApproveStandardsChecklist ignores Hot Work and non-standards templates', () => {
+  const fields = [{ id: 'a', type: 'CHECKBOX', label: 'Item A' }]
+  assert.equal(
+    shouldAutoApproveStandardsChecklist({
+      templateName: 'Hot Work Permit',
+      fields,
+      fieldValues: { a: 'yes' },
+    }),
+    false
+  )
+  assert.equal(
+    shouldAutoApproveStandardsChecklist({
+      templateName: 'Some Other Form',
+      fields,
+      fieldValues: { a: 'standard' },
+    }),
+    false
+  )
+})
+
+test('shouldAutoApproveStandardsChecklist requires at least one checkbox', () => {
+  assert.equal(
+    shouldAutoApproveStandardsChecklist({
+      templateName: 'Fall Arrest Inspection Checklist',
+      fields: [{ id: 't', type: 'TEXT', label: 'Note' }],
+      fieldValues: { t: 'hi' },
+    }),
+    false
+  )
 })

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const authenticate_1 = require("../middleware/authenticate");
 const agent_1 = require("../frank/agent");
+const localDocumentService_1 = require("../services/localDocumentService");
 const router = (0, express_1.Router)();
 router.use(authenticate_1.authenticate);
 function ensureFrankAccess(role) {
@@ -33,7 +34,8 @@ function getFrankSystemPrompt() {
 ## Tools Available
 You have tools to query: employees, jobs, sites, certificates, form templates, library documents, submissions, incidents, injuries, near-misses, hazards, safety alerts, inspections, CAPA, compliance calendar, HR todos, subcontractors, audit log, and notifications.
 - For anything uploaded in "Forms & documents": use query_form_templates (fillable/submittable forms) or query_library_documents (view-only reference documents).
-- For questions about chemicals, substances, hazards, safety procedures, or any topic that might be in an SDS or uploaded document: use search_documents first. The search is semantic — "welding fumes hazards" can match content about isocyanates and metal fumes.
+- For questions about chemicals, substances, hazards, safety procedures, or any topic that might be in an SDS or uploaded document: use search_documents first. The search is semantic — "welding fumes hazards" can match content about isocyanates and metal fumes.${(0, localDocumentService_1.isLocalDocumentStoreConfigured)() ? `
+- A second, on-premises "local archive" holds documents ingested from USB drives and field uploads (separate from the cloud library). Use search_local_documents alongside search_documents for document-content questions. When your answer draws on a local archive passage, say so — e.g. "According to [document name] (local archive, p. 12) …" — so the user knows the source is the local store.` : ''}
 
 ---
 

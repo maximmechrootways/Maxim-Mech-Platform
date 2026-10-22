@@ -150,6 +150,8 @@ router.patch('/:id', async (req, res, next) => {
             jobReference: str('jobReference'),
             jobId: body.jobId === null || body.jobId === '' ? null : str('jobId'),
             paid: body.paid === true ? true : body.paid === false ? false : undefined,
+            reviewed: body.reviewed === true ? true : body.reviewed === false ? false : undefined,
+            reviewedById: req.user?.id ?? null,
             paymentTerms: str('paymentTerms'),
             notes: str('notes'),
         }));
@@ -245,6 +247,9 @@ router.get('/', async (req, res, next) => {
         const dateTo = typeof req.query.dateTo === 'string' ? req.query.dateTo : undefined;
         const status = typeof req.query.status === 'string' ? req.query.status : undefined;
         const documentType = typeof req.query.documentType === 'string' ? req.query.documentType : undefined;
+        const paid = typeof req.query.paid === 'string' ? req.query.paid : undefined;
+        const reviewed = typeof req.query.reviewed === 'string' ? req.query.reviewed : undefined;
+        const hasJob = typeof req.query.hasJob === 'string' ? req.query.hasJob : undefined;
         const sort = typeof req.query.sort === 'string' ? req.query.sort : undefined;
         const limit = req.query.limit ? Number(req.query.limit) : undefined;
         const offset = req.query.offset ? Number(req.query.offset) : undefined;
@@ -263,6 +268,9 @@ router.get('/', async (req, res, next) => {
             maxTotal: Number.isFinite(maxTotal) ? maxTotal : undefined,
             status,
             documentType,
+            paid,
+            reviewed,
+            hasJob,
             sort,
             limit,
             offset,

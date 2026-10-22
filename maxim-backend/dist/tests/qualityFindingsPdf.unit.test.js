@@ -114,3 +114,61 @@ const detectPdfSubmission_1 = require("../services/qualityFindings/detectPdfSubm
     });
     strict_1.default.equal(out.length, 0);
 });
+(0, node_test_1.default)('normalizeStandardsChecklistChoiceForAutoApprove maps pass/fail/blank', () => {
+    strict_1.default.equal((0, detectPdfSubmission_1.normalizeStandardsChecklistChoiceForAutoApprove)('standard'), 'standard');
+    strict_1.default.equal((0, detectPdfSubmission_1.normalizeStandardsChecklistChoiceForAutoApprove)('true'), 'standard');
+    strict_1.default.equal((0, detectPdfSubmission_1.normalizeStandardsChecklistChoiceForAutoApprove)('na'), 'na');
+    strict_1.default.equal((0, detectPdfSubmission_1.normalizeStandardsChecklistChoiceForAutoApprove)('N/A'), 'na');
+    strict_1.default.equal((0, detectPdfSubmission_1.normalizeStandardsChecklistChoiceForAutoApprove)(''), 'blank');
+    strict_1.default.equal((0, detectPdfSubmission_1.normalizeStandardsChecklistChoiceForAutoApprove)('substandard'), 'fail');
+    strict_1.default.equal((0, detectPdfSubmission_1.normalizeStandardsChecklistChoiceForAutoApprove)('no'), 'fail');
+    strict_1.default.equal((0, detectPdfSubmission_1.normalizeStandardsChecklistChoiceForAutoApprove)('yes'), 'fail');
+});
+(0, node_test_1.default)('shouldAutoApproveStandardsChecklist approves when all standard or na', () => {
+    const fields = [
+        { id: 'a', type: 'CHECKBOX', label: 'Item A' },
+        { id: 'b', type: 'CHECKBOX', label: 'Item B' },
+        { id: 't', type: 'TEXT', label: 'Note' },
+    ];
+    strict_1.default.equal((0, detectPdfSubmission_1.shouldAutoApproveStandardsChecklist)({
+        templateName: 'Fall Arrest Inspection Checklist',
+        fields,
+        fieldValues: { a: 'standard', b: 'na', t: 'anything' },
+    }), true);
+});
+(0, node_test_1.default)('shouldAutoApproveStandardsChecklist rejects substandard or blank', () => {
+    const fields = [
+        { id: 'a', type: 'CHECKBOX', label: 'Item A' },
+        { id: 'b', type: 'CHECKBOX', label: 'Item B' },
+    ];
+    strict_1.default.equal((0, detectPdfSubmission_1.shouldAutoApproveStandardsChecklist)({
+        templateName: 'Fall Arrest Inspection Checklist',
+        fields,
+        fieldValues: { a: 'standard', b: 'substandard' },
+    }), false);
+    strict_1.default.equal((0, detectPdfSubmission_1.shouldAutoApproveStandardsChecklist)({
+        templateName: 'Fall Arrest Inspection Checklist',
+        fields,
+        fieldValues: { a: 'standard', b: '' },
+    }), false);
+});
+(0, node_test_1.default)('shouldAutoApproveStandardsChecklist ignores Hot Work and non-standards templates', () => {
+    const fields = [{ id: 'a', type: 'CHECKBOX', label: 'Item A' }];
+    strict_1.default.equal((0, detectPdfSubmission_1.shouldAutoApproveStandardsChecklist)({
+        templateName: 'Hot Work Permit',
+        fields,
+        fieldValues: { a: 'yes' },
+    }), false);
+    strict_1.default.equal((0, detectPdfSubmission_1.shouldAutoApproveStandardsChecklist)({
+        templateName: 'Some Other Form',
+        fields,
+        fieldValues: { a: 'standard' },
+    }), false);
+});
+(0, node_test_1.default)('shouldAutoApproveStandardsChecklist requires at least one checkbox', () => {
+    strict_1.default.equal((0, detectPdfSubmission_1.shouldAutoApproveStandardsChecklist)({
+        templateName: 'Fall Arrest Inspection Checklist',
+        fields: [{ id: 't', type: 'TEXT', label: 'Note' }],
+        fieldValues: { t: 'hi' },
+    }), false);
+});

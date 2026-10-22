@@ -3,6 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.normalizeChecklistValueForFinding = normalizeChecklistValueForFinding;
 exports.isWashroomItemCheckboxLabel = isWashroomItemCheckboxLabel;
 exports.extractLinkedJobIdFromFieldValues = extractLinkedJobIdFromFieldValues;
+exports.isStandardsTriStateChecklistTemplateName = isStandardsTriStateChecklistTemplateName;
+exports.normalizeStandardsChecklistChoiceForAutoApprove = normalizeStandardsChecklistChoiceForAutoApprove;
+exports.shouldAutoApproveStandardsChecklist = shouldAutoApproveStandardsChecklist;
 exports.detectPdfChecklistSubstandard = detectPdfChecklistSubstandard;
 const LINKED_JOB_FIELD_KEY = '__jobId__';
 /** Align with maxim-frontend FormFill / FormReviewPdf checklist normalization (Phase 0: substandard only). */
@@ -41,6 +44,48 @@ function isStandardsTriStateChecklistTemplateName(name) {
         /fall\s*arrest\s*inspection(\s*checklist)?/i.test(n) ||
         /power\s*(and|&|\/)?\s*elevating/i.test(n) ||
         (/equipment\s*inspection/i.test(n) && !/hot\s*work\s*permit/i.test(n)));
+}
+/**
+ * Normalize checklist stored values for auto-approve (standards tri-state forms only).
+ * Pass = standard | na (and legacy true → standard). Fail/blank = anything else.
+ */
+function normalizeStandardsChecklistChoiceForAutoApprove(raw) {
+    const s = String(raw ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ');
+    if (!s)
+        return 'blank';
+    if (s === 'standard' || s === 'true')
+        return 'standard';
+    if (s === 'na' || s === 'n/a' || s === 'missing')
+        return 'na';
+    return 'fail';
+}
+/**
+ * Auto-approve when every checklist CHECKBOX on a standards tri-state template
+ * is Up to standard (`standard`) or N/A (`na`). Blank or Substandard → not auto-approve.
+ * Non-standards templates (Hot Work, washroom, plain forms) → false (no change).
+ */
+function shouldAutoApproveStandardsChecklist(opts) {
+    if (!isStandardsTriStateChecklistTemplateName(opts.templateName))
+        return false;
+    const seenFieldIds = new Set();
+    let checklistCount = 0;
+    for (const f of opts.fields) {
+        const typeNorm = String(f.type ?? '').trim().toUpperCase();
+        if (typeNorm !== 'CHECKBOX')
+            continue;
+        if (seenFieldIds.has(f.id))
+            continue;
+        seenFieldIds.add(f.id);
+        checklistCount += 1;
+        const choice = normalizeStandardsChecklistChoiceForAutoApprove(opts.fieldValues[f.id]);
+        if (choice !== 'standard' && choice !== 'na')
+            return false;
+    }
+    return checklistCount > 0;
 }
 function detectPdfChecklistSubstandard(opts) {
     const linkedJobId = extractLinkedJobIdFromFieldValues(opts.fieldValues);

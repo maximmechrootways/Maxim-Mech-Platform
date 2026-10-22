@@ -3,9 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.LIBRARY_ALLOWED_MIME_TYPES = void 0;
 exports.isPdfByMagic = isPdfByMagic;
 exports.isPngByMagic = isPngByMagic;
 exports.isJpegByMagic = isJpegByMagic;
+exports.isZipByMagic = isZipByMagic;
+exports.isOleByMagic = isOleByMagic;
 exports.getValidatedDocumentType = getValidatedDocumentType;
 exports.sanitizeDocumentName = sanitizeDocumentName;
 const fs_1 = __importDefault(require("fs"));
@@ -19,6 +22,12 @@ const PNG_LEN = 8;
 /** JPEG: FF D8 FF */
 const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 const JPEG_LEN = 3;
+/** ZIP / OOXML (docx, xlsx): PK */
+const ZIP_MAGIC = Buffer.from([0x50, 0x4b]);
+/** OLE compound (legacy .doc / .xls): D0 CF 11 E0 */
+const OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0]);
+/** Windows executable */
+const EXE_MAGIC = Buffer.from([0x4d, 0x5a]);
 function readMagic(filePath, len) {
     try {
         const fd = fs_1.default.openSync(filePath, 'r');
@@ -47,20 +56,70 @@ function isJpegByMagic(filePath) {
     const buf = readMagic(filePath, JPEG_LEN);
     return buf !== null && buf.equals(JPEG_MAGIC);
 }
+function isZipByMagic(filePath) {
+    const buf = readMagic(filePath, 2);
+    return buf !== null && buf.equals(ZIP_MAGIC);
+}
+function isOleByMagic(filePath) {
+    const buf = readMagic(filePath, 4);
+    return buf !== null && buf.equals(OLE_MAGIC);
+}
+function isExecutableByMagic(filePath) {
+    const buf = readMagic(filePath, 2);
+    return buf !== null && buf.equals(EXE_MAGIC);
+}
+exports.LIBRARY_ALLOWED_MIME_TYPES = [
+    'application/pdf',
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+    'text/plain',
+    'application/csv',
+    'application/zip',
+    'application/x-zip-compressed',
+];
+const SAFE_EXTS = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.zip'];
 /**
  * Validate file content by magic bytes. Returns allowed type or 'reject'.
  * Use this for document uploads that allow PDF and images.
  */
 function getValidatedDocumentType(filePath, mimetype) {
-    if (mimetype === 'application/pdf' && isPdfByMagic(filePath))
+    const mime = (mimetype || '').toLowerCase();
+    if (mime === 'application/pdf' && isPdfByMagic(filePath))
         return 'pdf';
-    if (mimetype === 'image/png' && isPngByMagic(filePath))
+    if (mime === 'image/png' && isPngByMagic(filePath))
         return 'png';
-    if ((mimetype === 'image/jpeg' || mimetype === 'image/jpg') && isJpegByMagic(filePath))
+    if ((mime === 'image/jpeg' || mime === 'image/jpg') && isJpegByMagic(filePath))
         return 'jpeg';
+    if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+        isZipByMagic(filePath)) {
+        return 'docx';
+    }
+    if (mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' &&
+        isZipByMagic(filePath)) {
+        return 'xlsx';
+    }
+    if ((mime === 'application/zip' || mime === 'application/x-zip-compressed') && isZipByMagic(filePath)) {
+        return 'zip';
+    }
+    if (mime === 'application/msword' && isOleByMagic(filePath))
+        return 'doc';
+    if (mime === 'application/vnd.ms-excel' && (isOleByMagic(filePath) || isZipByMagic(filePath))) {
+        return 'xls';
+    }
+    if ((mime === 'text/csv' || mime === 'application/csv' || mime === 'text/plain') &&
+        !isExecutableByMagic(filePath) &&
+        !isPdfByMagic(filePath) &&
+        !isOleByMagic(filePath)) {
+        return mime === 'text/plain' ? 'txt' : 'csv';
+    }
     return 'reject';
 }
-const SAFE_EXTS = ['.pdf', '.png', '.jpg', '.jpeg'];
 /**
  * Sanitize display name for uploads: alphanumeric, spaces, hyphen, underscore, valid extension.
  * Returns a safe filename (no path traversal, no double extension).

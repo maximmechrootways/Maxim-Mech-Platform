@@ -4,6 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TIME_OFF_REASONS = void 0;
+exports.parseDateOnly = parseDateOnly;
+exports.countOntarioWorkdays = countOntarioWorkdays;
 exports.listVisibleLabourersForTimeOff = listVisibleLabourersForTimeOff;
 exports.createTimeOffEntry = createTimeOffEntry;
 exports.listTimeOffEntries = listTimeOffEntries;
@@ -529,13 +531,40 @@ async function deleteTimeOffEntry(actorUserId, actorRole, entryId) {
     const visibleIds = visible.map((x) => x.id);
     if (visibleIds.length === 0)
         throw { status: 403, message: 'No users are visible to your role.' };
-    const rows = await prisma_1.prisma.$queryRaw `
-    DELETE FROM "TimeOffEntry"
-    WHERE "id" = ${id}
-      AND "labourerId" = ANY (${visibleIds}::text[])
-    RETURNING "id"
-  `;
-    if (!rows[0])
-        throw { status: 404, message: 'Time off entry not found.' };
-    return { deleted: true };
+    // Keep Employee requests in sync: if this calendar entry came from an approved request,
+    // mark that request cancelled when HR deletes the record (e.g. duplicate / mistake).
+    const linked = await prisma_1.prisma.timeOffRequest.findFirst({
+        where: { timeOffEntryId: id },
+        select: { id: true, status: true, reviewNotes: true },
+    });
+    let requestCancelled = false;
+    await prisma_1.prisma.$transaction(async (tx) => {
+        if (linked && linked.status === 'approved') {
+            const stamp = new Date().toISOString().slice(0, 10);
+            const noteLine = `Time off record deleted by HR on ${stamp}; request marked cancelled.`;
+            const reviewNotes = linked.reviewNotes?.trim()
+                ? `${linked.reviewNotes.trim()}\n${noteLine}`
+                : noteLine;
+            await tx.timeOffRequest.update({
+                where: { id: linked.id },
+                data: {
+                    status: 'cancelled',
+                    timeOffEntryId: null,
+                    reviewNotes,
+                    reviewedAt: new Date(),
+                    reviewedById: actorUserId,
+                },
+            });
+            requestCancelled = true;
+        }
+        const rows = await tx.$queryRaw `
+      DELETE FROM "TimeOffEntry"
+      WHERE "id" = ${id}
+        AND "labourerId" = ANY (${visibleIds}::text[])
+      RETURNING "id"
+    `;
+        if (!rows[0])
+            throw { status: 404, message: 'Time off entry not found.' };
+    });
+    return { deleted: true, requestCancelled };
 }

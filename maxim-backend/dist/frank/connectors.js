@@ -58,6 +58,7 @@ const hrTodoService = __importStar(require("../services/hrTodoService"));
 const subcontractorService = __importStar(require("../services/subcontractorService"));
 const libraryDocumentService = __importStar(require("../services/libraryDocumentService"));
 const documentIngestionService = __importStar(require("../services/documentIngestionService"));
+const localDocumentService = __importStar(require("../services/localDocumentService"));
 const pdfTemplateService = __importStar(require("../services/pdfTemplateService"));
 const auditLogService = __importStar(require("../services/auditLogService"));
 const notificationService = __importStar(require("../services/notificationService"));
@@ -291,16 +292,49 @@ async function executeTool(toolName, input, ctx) {
                     }
                     return {
                         found: true,
+                        source: 'cloud',
                         results: results.map((r) => ({
                             documentName: r.documentName,
                             relevanceScore: `${Math.round(r.similarity * 100)}%`,
                             content: r.content,
+                            source: 'cloud',
                         })),
                     };
                 }
                 catch (err) {
                     const message = err instanceof Error ? err.message : 'Document search failed.';
                     return { error: message, found: false };
+                }
+            }
+            case 'search_local_documents': {
+                const query = String(input.query ?? '').trim();
+                if (!query)
+                    return { error: 'query is required.', found: false };
+                try {
+                    const results = await localDocumentService.searchLocalDocuments(query, typeof input.limit === 'number' ? input.limit : 5, typeof input.project === 'string' ? input.project : undefined);
+                    if (results.length === 0) {
+                        return { found: false, source: 'local', message: 'No relevant content found in the local archive.' };
+                    }
+                    return {
+                        found: true,
+                        source: 'local',
+                        results: results.map((r) => ({
+                            documentName: r.documentName,
+                            documentId: r.documentId,
+                            project: r.project || undefined,
+                            folderPath: r.folderPath || undefined,
+                            pageNumber: r.pageNumber,
+                            relevanceScore: `${Math.round(r.similarity * 100)}%`,
+                            content: r.content,
+                            source: 'local',
+                            // Same-origin proxy path the frontend can open for preview/download
+                            fileUrl: `/local-documents/${r.documentId}/file`,
+                        })),
+                    };
+                }
+                catch (err) {
+                    const message = err instanceof Error ? err.message : 'Local archive search failed.';
+                    return { error: message, found: false, source: 'local' };
                 }
             }
             case 'query_audit_log': {

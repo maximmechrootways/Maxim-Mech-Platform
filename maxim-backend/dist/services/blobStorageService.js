@@ -47,6 +47,8 @@ async function uploadBlob(localFilePath, folder = 'templates') {
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
     try {
         await blockBlobClient.uploadFile(localFilePath, {
+            blockSize: 4 * 1024 * 1024,
+            concurrency: 4,
             blobHTTPHeaders: {
                 blobContentType: detectedContentType,
             },
@@ -58,8 +60,31 @@ async function uploadBlob(localFilePath, folder = 'templates') {
         return blobName;
     }
     catch (err) {
-        console.error(`Blob upload failed:`, err.message);
-        throw new Error('File storage failed. Please try again.');
+        console.error(`Blob upload failed (attempt 1):`, err.message);
+        // One retry for transient Azure/network blips (common on larger SDS PDFs)
+        try {
+            await blockBlobClient.uploadFile(localFilePath, {
+                blockSize: 4 * 1024 * 1024,
+                concurrency: 2,
+                blobHTTPHeaders: {
+                    blobContentType: detectedContentType,
+                },
+                metadata: {
+                    uploadedAt: new Date().toISOString(),
+                    folder,
+                    retried: 'true',
+                }
+            });
+            return blobName;
+        }
+        catch (err2) {
+            console.error(`Blob upload failed (attempt 2):`, err2.message);
+            throw {
+                status: 503,
+                expose: true,
+                message: 'File storage failed. Please try again in a moment.',
+            };
+        }
     }
     finally {
         // Always clean up local temp file whether upload succeeded or failed
@@ -80,7 +105,11 @@ async function getBlobSasUrl(blobName, expiryMinutes = 30) {
     }
     catch (err) {
         console.error(`Failed to generate SAS URL:`, err.message);
-        throw new Error('Could not generate file access URL.');
+        throw {
+            status: 503,
+            expose: true,
+            message: 'Could not generate file access URL. Please try again.',
+        };
     }
 }
 async function deleteBlob(blobName) {
@@ -127,7 +156,11 @@ async function uploadBufferToBlob(blobName, buffer, contentType = 'application/p
     }
     catch (err) {
         console.error(`Buffer upload failed:`, err.message);
-        throw new Error('File storage failed.');
+        throw {
+            status: 503,
+            expose: true,
+            message: 'File storage failed. Please try again in a moment.',
+        };
     }
 }
 async function listBlobsByPrefix(prefix) {

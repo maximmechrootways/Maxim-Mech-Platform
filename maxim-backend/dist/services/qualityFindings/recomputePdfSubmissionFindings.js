@@ -65,17 +65,17 @@ async function runPdfQualityFindingDedupe(opts) {
  * Replaces all PDF-derived quality findings for this submission (hard delete + insert).
  * Safe to call on every submit/save; idempotent per current field values.
  */
-async function recomputePdfSubmissionFindings(submissionId) {
+async function recomputePdfSubmissionFindings(submissionId, opts) {
     const prev = recomputeTailBySubmissionId.get(submissionId) ?? Promise.resolve();
     const job = prev
         .catch(() => {
         /* keep queue alive */
     })
-        .then(() => recomputePdfSubmissionFindingsCore(submissionId));
+        .then(() => recomputePdfSubmissionFindingsCore(submissionId, opts));
     recomputeTailBySubmissionId.set(submissionId, job);
     await job;
 }
-async function recomputePdfSubmissionFindingsCore(submissionId) {
+async function recomputePdfSubmissionFindingsCore(submissionId, opts) {
     const s = await prisma_1.prisma.pdfSubmission.findUnique({
         where: { id: submissionId },
         include: { template: { select: { id: true, name: true, fields: true } } },
@@ -112,5 +112,7 @@ async function recomputePdfSubmissionFindingsCore(submissionId) {
             })),
         });
     });
-    await runPdfQualityFindingDedupe({ submissionId });
+    if (!opts?.skipDedupe) {
+        await runPdfQualityFindingDedupe({ submissionId });
+    }
 }

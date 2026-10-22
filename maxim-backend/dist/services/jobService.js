@@ -120,25 +120,13 @@ async function getLabourerIdsSupervisedBy(supervisorUserId) {
     });
     return [...new Set([...assignments.map((a) => a.userId), ...siteAssignments.map((a) => a.userId)])];
 }
-/** Returns team members (id, name) for form assignment. Supervisor = labourers on their jobs; Owner/HR = all active users. */
-async function getMyTeamMembers(userId, userRole) {
-    if (userRole === 'supervisor') {
-        const ids = await getLabourerIdsSupervisedBy(userId);
-        if (ids.length === 0)
-            return [];
-        const users = await prisma_1.prisma.user.findMany({
-            where: { id: { in: ids }, isActive: true },
-            select: { id: true, firstName: true, lastName: true },
-        });
-        return users.map((u) => ({
-            id: u.id,
-            name: `${u.firstName} ${u.lastName}`.trim() || u.id,
-        }));
-    }
-    if (userRole === 'owner' || userRole === 'hr') {
+/** Returns team members (id, name) for form/task assignment. Supervisor, Owner, and HR all see every active user (no job-roster gate). */
+async function getMyTeamMembers(_userId, userRole) {
+    if (userRole === 'supervisor' || userRole === 'owner' || userRole === 'hr') {
         const users = await prisma_1.prisma.user.findMany({
             where: { isActive: true },
             select: { id: true, firstName: true, lastName: true },
+            orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         });
         return users.map((u) => ({
             id: u.id,

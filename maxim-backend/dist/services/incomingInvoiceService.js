@@ -18,6 +18,12 @@ const invoicePdfText_1 = require("../lib/invoicePdfText");
 const incomingInvoiceDocumentResolver_1 = require("./incomingInvoiceDocumentResolver");
 const incomingInvoiceReceiptLink_1 = require("./incomingInvoiceReceiptLink");
 const incomingInvoiceAiService_1 = require("./incomingInvoiceAiService");
+function displayName(user) {
+    if (!user)
+        return null;
+    const name = `${user.firstName} ${user.lastName}`.trim();
+    return name || null;
+}
 function decimalToString(value) {
     if (value == null)
         return null;
@@ -41,6 +47,18 @@ async function listIncomingInvoices(params) {
         where.status = params.status;
     if (params.documentType)
         where.documentType = params.documentType;
+    if (params.paid === 'paid')
+        where.paidAt = { not: null };
+    else if (params.paid === 'unpaid')
+        where.paidAt = null;
+    if (params.reviewed === 'reviewed')
+        where.reviewedAt = { not: null };
+    else if (params.reviewed === 'unreviewed')
+        where.reviewedAt = null;
+    if (params.hasJob === 'yes')
+        where.jobId = { not: null };
+    else if (params.hasJob === 'no')
+        where.jobId = null;
     if (params.vendor)
         where.vendorName = { contains: params.vendor, mode: 'insensitive' };
     if (params.q) {
@@ -84,6 +102,7 @@ async function listIncomingInvoices(params) {
             include: {
                 _count: { select: { attachments: true } },
                 job: { select: { id: true, title: true } },
+                reviewedBy: { select: { id: true, firstName: true, lastName: true } },
                 attachments: {
                     orderBy: { attachmentIndex: 'asc' },
                     select: { id: true, originalName: true },
@@ -109,6 +128,9 @@ async function listIncomingInvoices(params) {
         jobId: row.jobId,
         jobTitle: row.job?.title ?? null,
         paidAt: row.paidAt?.toISOString() ?? null,
+        reviewedAt: row.reviewedAt?.toISOString() ?? null,
+        reviewedById: row.reviewedById,
+        reviewedByName: displayName(row.reviewedBy),
         relatedInvoiceId: row.relatedInvoiceId,
         notes: row.notes,
         status: row.status,
@@ -122,6 +144,7 @@ async function getIncomingInvoiceDetail(id) {
         where: { id },
         include: {
             attachments: { orderBy: { attachmentIndex: 'asc' } },
+            reviewedBy: { select: { id: true, firstName: true, lastName: true } },
         },
     });
     if (!invoice) {
@@ -152,6 +175,9 @@ async function getIncomingInvoiceDetail(id) {
         jobReference: invoice.jobReference,
         jobId: invoice.jobId,
         paidAt: invoice.paidAt?.toISOString() ?? null,
+        reviewedAt: invoice.reviewedAt?.toISOString() ?? null,
+        reviewedById: invoice.reviewedById,
+        reviewedByName: displayName(invoice.reviewedBy),
         paymentTerms: invoice.paymentTerms,
         notes: invoice.notes,
         extractedData: invoice.extractedData,
@@ -402,6 +428,19 @@ async function updateIncomingInvoice(id, input) {
         paidAt = new Date();
     else if (input.paid === false)
         paidAt = null;
+    let reviewedAt;
+    let reviewedById;
+    if (input.reviewed === true) {
+        if (!input.reviewedById) {
+            throw Object.assign(new Error('Reviewer is required'), { status: 400 });
+        }
+        reviewedAt = new Date();
+        reviewedById = input.reviewedById;
+    }
+    else if (input.reviewed === false) {
+        reviewedAt = null;
+        reviewedById = null;
+    }
     await prisma_1.prisma.incomingInvoice.update({
         where: { id },
         data: {
@@ -417,6 +456,8 @@ async function updateIncomingInvoice(id, input) {
             jobReference: input.jobReference !== undefined ? (input.jobReference?.trim() || null) : undefined,
             jobId: input.jobId !== undefined ? (input.jobId || null) : undefined,
             paidAt: paidAt !== undefined ? paidAt : undefined,
+            reviewedAt: reviewedAt !== undefined ? reviewedAt : undefined,
+            reviewedById: reviewedById !== undefined ? reviewedById : undefined,
             paymentTerms: input.paymentTerms !== undefined ? (input.paymentTerms?.trim() || null) : undefined,
             notes: input.notes !== undefined ? (input.notes?.trim() || null) : undefined,
             searchText: buildSearchTextFromInvoice({

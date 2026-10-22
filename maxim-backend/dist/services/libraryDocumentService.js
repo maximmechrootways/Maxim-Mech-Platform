@@ -17,8 +17,36 @@ const projectDocumentFolderService_1 = require("./projectDocumentFolderService")
 const fs_1 = __importDefault(require("fs"));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pdfParse = require('pdf-parse');
+/** Large SDS books — skip sync extract (OOM/timeout risk); background ingest handles text. */
+const MAX_SYNC_PDF_EXTRACT_BYTES = 2 * 1024 * 1024;
+const PDF_EXTRACT_TIMEOUT_MS = 8000;
+const MAX_EXTRACTED_TEXT_CHARS = 500000;
 function isOwnerOrHr(role) {
     return role === 'owner' || role === 'hr';
+}
+async function tryExtractPdfText(file) {
+    if (file.mimetype !== 'application/pdf')
+        return null;
+    const size = file.size || 0;
+    if (size > MAX_SYNC_PDF_EXTRACT_BYTES) {
+        console.log(`Skipping sync PDF extract for large file ${file.originalname} (${(size / 1024 / 1024).toFixed(1)}MB) — background ingest will process it`);
+        return null;
+    }
+    try {
+        const fileBuffer = fs_1.default.readFileSync(file.path);
+        const pdfData = await Promise.race([
+            pdfParse(fileBuffer),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('PDF extract timeout')), PDF_EXTRACT_TIMEOUT_MS)),
+        ]);
+        const text = pdfData.text?.trim() || null;
+        if (!text)
+            return null;
+        return text.length > MAX_EXTRACTED_TEXT_CHARS ? text.slice(0, MAX_EXTRACTED_TEXT_CHARS) : text;
+    }
+    catch (e) {
+        console.warn('PDF text extraction failed for', file.originalname, e);
+        return null;
+    }
 }
 async function listLibraryDocuments(userId, userRole) {
     const all = await prisma_1.prisma.libraryDocument.findMany({
@@ -108,18 +136,11 @@ async function createLibraryDocument(userId, userRole, file, data) {
     else if (data.folderId && !data.jobId) {
         throw { status: 400, message: 'jobId is required when folderId is set' };
     }
-    // Extract PDF text BEFORE uploading (uploadBlob deletes the local file)
-    let extractedText = null;
-    if (file.mimetype === 'application/pdf') {
-        try {
-            const fileBuffer = fs_1.default.readFileSync(file.path);
-            const pdfData = await pdfParse(fileBuffer);
-            extractedText = pdfData.text?.trim() || null;
-            console.log(`Extracted ${extractedText?.length ?? 0} chars from ${file.originalname}`);
-        }
-        catch (e) {
-            console.warn('PDF text extraction failed for', file.originalname, e);
-        }
+    // Extract text BEFORE blob upload (uploadBlob deletes the local temp file).
+    // Large SDS/MSDS books skip sync extract to avoid Azure OOM/timeouts.
+    const extractedText = await tryExtractPdfText(file);
+    if (extractedText) {
+        console.log(`Extracted ${extractedText.length} chars from ${file.originalname}`);
     }
     // Upload to Azure Blob Storage (deletes local file)
     const blobName = await (0, blobStorageService_1.uploadBlob)(file.path, 'documents');
@@ -183,18 +204,7 @@ async function replaceLibraryDocumentFile(id, userId, userRole, file) {
     const doc = await prisma_1.prisma.libraryDocument.findUnique({ where: { id } });
     if (!doc)
         throw { status: 404, message: 'Document not found' };
-    // Extract text from new file before upload (uploadBlob deletes local file)
-    let extractedText = null;
-    if (file.mimetype === 'application/pdf') {
-        try {
-            const fileBuffer = fs_1.default.readFileSync(file.path);
-            const pdfData = await pdfParse(fileBuffer);
-            extractedText = pdfData.text?.trim() || null;
-        }
-        catch (e) {
-            console.warn('PDF text extraction failed during overwrite for', file.originalname, e);
-        }
-    }
+    const extractedText = await tryExtractPdfText(file);
     // Upload new file to blob storage
     const newBlobName = await (0, blobStorageService_1.uploadBlob)(file.path, 'documents');
     // Delete the old blob if the new one uploaded successfully

@@ -187,6 +187,7 @@ async function dedupeStoredPdfQualityFindings() {
 /**
  * Re-runs PDF checklist detection for every completed (non-draft) submission so Form Red Flags
  * stays accurate without opening each form individually.
+ * Skips per-submission dedupe during the loop; one global dedupe runs at the end.
  */
 async function syncQualityFindingsFromCompletedPdfSubmissions() {
     const rows = await prisma_1.prisma.pdfSubmission.findMany({
@@ -198,7 +199,7 @@ async function syncQualityFindingsFromCompletedPdfSubmissions() {
     let failed = 0;
     for (let i = 0; i < rows.length; i += batchSize) {
         const chunk = rows.slice(i, i + batchSize);
-        const settled = await Promise.allSettled(chunk.map(({ id }) => (0, recomputePdfSubmissionFindings_1.recomputePdfSubmissionFindings)(id)));
+        const settled = await Promise.allSettled(chunk.map(({ id }) => (0, recomputePdfSubmissionFindings_1.recomputePdfSubmissionFindings)(id, { skipDedupe: true })));
         for (const r of settled) {
             if (r.status === 'rejected')
                 failed += 1;

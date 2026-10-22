@@ -13,6 +13,23 @@ async function dataUrlToPdf(dataUrl: string) {
   return loadingTask.promise
 }
 
+async function blobToPdf(blob: Blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  const loadingTask = pdfjsLib.getDocument({ data: bytes })
+  return loadingTask.promise
+}
+
+/**
+ * Renders only the first page of a PDF blob to a PNG data URL (for list thumbnails).
+ */
+export async function pdfBlobToFirstPageDataUrl(
+  blob: Blob,
+  options?: { scale?: number }
+): Promise<string | null> {
+  const pdf = await blobToPdf(blob)
+  return renderPage(pdf, 1, options?.scale ?? 0.75)
+}
+
 async function renderPage(
   pdf: pdfjsLib.PDFDocumentProxy,
   pageNumber: number,

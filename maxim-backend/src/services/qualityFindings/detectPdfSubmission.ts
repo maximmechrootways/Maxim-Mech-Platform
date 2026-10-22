@@ -47,7 +47,7 @@ export type PdfFindingDraft = {
 }
 
 /** Templates that use Standard / Substandard / N/A in FormFill (not Hot Work yes/no). */
-function isStandardsTriStateChecklistTemplateName(name: string | null | undefined): boolean {
+export function isStandardsTriStateChecklistTemplateName(name: string | null | undefined): boolean {
   const n = String(name ?? '')
   return (
     /weekly\s*project\s*inspection/i.test(n) ||
@@ -56,6 +56,50 @@ function isStandardsTriStateChecklistTemplateName(name: string | null | undefine
     /power\s*(and|&|\/)?\s*elevating/i.test(n) ||
     (/equipment\s*inspection/i.test(n) && !/hot\s*work\s*permit/i.test(n))
   )
+}
+
+/**
+ * Normalize checklist stored values for auto-approve (standards tri-state forms only).
+ * Pass = standard | na (and legacy true → standard). Fail/blank = anything else.
+ */
+export function normalizeStandardsChecklistChoiceForAutoApprove(
+  raw: unknown
+): 'standard' | 'na' | 'fail' | 'blank' {
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+  if (!s) return 'blank'
+  if (s === 'standard' || s === 'true') return 'standard'
+  if (s === 'na' || s === 'n/a' || s === 'missing') return 'na'
+  return 'fail'
+}
+
+/**
+ * Auto-approve when every checklist CHECKBOX on a standards tri-state template
+ * is Up to standard (`standard`) or N/A (`na`). Blank or Substandard → not auto-approve.
+ * Non-standards templates (Hot Work, washroom, plain forms) → false (no change).
+ */
+export function shouldAutoApproveStandardsChecklist(opts: {
+  templateName: string
+  fields: PdfFieldLike[]
+  fieldValues: Record<string, unknown>
+}): boolean {
+  if (!isStandardsTriStateChecklistTemplateName(opts.templateName)) return false
+
+  const seenFieldIds = new Set<string>()
+  let checklistCount = 0
+  for (const f of opts.fields) {
+    const typeNorm = String(f.type ?? '').trim().toUpperCase()
+    if (typeNorm !== 'CHECKBOX') continue
+    if (seenFieldIds.has(f.id)) continue
+    seenFieldIds.add(f.id)
+    checklistCount += 1
+    const choice = normalizeStandardsChecklistChoiceForAutoApprove(opts.fieldValues[f.id])
+    if (choice !== 'standard' && choice !== 'na') return false
+  }
+  return checklistCount > 0
 }
 
 export function detectPdfChecklistSubstandard(opts: {

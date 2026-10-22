@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { Prisma } from "@prisma/client";
 import type { SubmissionStatus } from "@prisma/client";
 import { recomputePdfSubmissionFindings } from "./qualityFindings/recomputePdfSubmissionFindings";
+import { shouldAutoApproveStandardsChecklist } from "./qualityFindings/detectPdfSubmission";
 import * as jobService from "./jobService";
 import * as notificationService from "./notificationService";
 import {
@@ -2092,11 +2093,17 @@ export async function submitForm(
   if (requiredSignerIds.length === 0) {
     delete mergedFieldValues[SIGNER_FIELD_ASSIGNMENTS_KEY];
     const finalPdfBlobPath = await generateFinalSignedPdf(submissionId);
+    const autoApprove = shouldAutoApproveStandardsChecklist({
+      templateName: s.template.name,
+      fields: s.template.fields ?? [],
+      fieldValues: mergedFieldValues,
+    });
+    const nextStatus: SubmissionStatus = autoApprove ? "APPROVED" : "SUBMITTED";
     const updated = await prisma.pdfSubmission.update({
       where: { id: submissionId },
       data: {
         fieldValues: mergedFieldValues as any,
-        status: "SUBMITTED",
+        status: nextStatus,
         submittedAt: new Date(),
         finalPdfBlobPath: finalPdfBlobPath ?? s.finalPdfBlobPath,
         finalizedAt: finalPdfBlobPath ? new Date() : s.finalizedAt,
@@ -2119,15 +2126,30 @@ export async function submitForm(
       },
       include: { template: { include: { fields: true } } },
     });
-    await notificationService
-      .notifyOwnerAndHr({
-        title: "Form submitted to HR",
-        body: `"${updated.title ?? updated.template.name}" is ready for HR review.`,
-        type: "alert",
-        linkTo: "/library?view=submissions",
-        emailPreferenceKey: "forms_pending",
-      })
-      .catch(() => {});
+    if (autoApprove) {
+      if (updated.submittedById) {
+        await notificationService
+          .createNotification({
+            userId: updated.submittedById,
+            title: "Form approved",
+            body: `Your submission "${updated.title ?? updated.template.name}" was auto-approved (all checklist items Up to standard or N/A).`,
+            type: "info",
+            linkTo: "/forms",
+            emailPreferenceKey: "forms_pending",
+          })
+          .catch(() => {});
+      }
+    } else {
+      await notificationService
+        .notifyOwnerAndHr({
+          title: "Form submitted to HR",
+          body: `"${updated.title ?? updated.template.name}" is ready for HR review.`,
+          type: "alert",
+          linkTo: "/library?view=submissions",
+          emailPreferenceKey: "forms_pending",
+        })
+        .catch(() => {});
+    }
     schedulePdfQualityFindingRecompute(submissionId);
     return updated;
   }
@@ -2623,18 +2645,26 @@ async function generateFinalSignedPdf(
 export async function checkSubmissionCompletion(submissionId: string) {
   const s = await prisma.pdfSubmission.findUnique({
     where: { id: submissionId },
-    include: { template: true, signers: true },
+    include: { template: { include: { fields: true } }, signers: true },
   });
   if (!s || s.signers.length === 0) return { completed: false };
   const allSigned = s.signers.every((sig) => sig.signatureStatus === "signed");
   if (!allSigned) return { completed: false };
+
+  const fieldValues = (s.fieldValues as Record<string, unknown>) || {};
+  const autoApprove = shouldAutoApproveStandardsChecklist({
+    templateName: s.template.name,
+    fields: s.template.fields ?? [],
+    fieldValues,
+  });
+  const nextStatus: SubmissionStatus = autoApprove ? "APPROVED" : "SUBMITTED";
 
   const finalPdfBlobPath =
     s.finalPdfBlobPath ?? (await generateFinalSignedPdf(submissionId));
   const updated = await prisma.pdfSubmission.update({
     where: { id: submissionId },
     data: {
-      status: "SUBMITTED",
+      status: nextStatus,
       submittedAt: s.submittedAt ?? new Date(),
       finalPdfBlobPath: finalPdfBlobPath ?? s.finalPdfBlobPath,
       finalizedAt: new Date(),
@@ -2642,15 +2672,30 @@ export async function checkSubmissionCompletion(submissionId: string) {
     include: { template: true },
   });
 
-  await notificationService
-    .notifyOwnerAndHr({
-      title: "Form ready for HR",
-      body: `All labourer signatures are complete for "${updated.title ?? updated.template.name}".`,
-      type: "alert",
-      linkTo: "/library?view=submissions",
-      emailPreferenceKey: "forms_pending",
-    })
-    .catch(() => {});
+  if (autoApprove) {
+    if (updated.submittedById) {
+      await notificationService
+        .createNotification({
+          userId: updated.submittedById,
+          title: "Form approved",
+          body: `Your submission "${updated.title ?? updated.template.name}" was auto-approved after all signatures (all checklist items Up to standard or N/A).`,
+          type: "info",
+          linkTo: "/forms",
+          emailPreferenceKey: "forms_pending",
+        })
+        .catch(() => {});
+    }
+  } else {
+    await notificationService
+      .notifyOwnerAndHr({
+        title: "Form ready for HR",
+        body: `All labourer signatures are complete for "${updated.title ?? updated.template.name}".`,
+        type: "alert",
+        linkTo: "/library?view=submissions",
+        emailPreferenceKey: "forms_pending",
+      })
+      .catch(() => {});
+  }
 
   schedulePdfQualityFindingRecompute(submissionId);
 

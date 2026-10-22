@@ -10,32 +10,52 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const authenticate_1 = require("../middleware/authenticate");
 const fileValidation_1 = require("../utils/fileValidation");
+const uploadDir_1 = require("../utils/uploadDir");
 const libraryDocumentService_1 = require("../services/libraryDocumentService");
 const documentIngestionService_1 = require("../services/documentIngestionService");
 const router = (0, express_1.Router)();
-const uploadDir = path_1.default.resolve(process.env.UPLOAD_DIR || 'uploads');
+const uploadDir = (0, uploadDir_1.ensureUploadDir)();
 const MAX_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB || '50', 10)) * 1024 * 1024;
 const storage = multer_1.default.diskStorage({
     destination: (_req, _file, cb) => {
-        if (!fs_1.default.existsSync(uploadDir))
-            fs_1.default.mkdirSync(uploadDir, { recursive: true });
-        cb(null, uploadDir);
+        try {
+            (0, uploadDir_1.ensureUploadDir)();
+            cb(null, uploadDir);
+        }
+        catch (e) {
+            cb(e, uploadDir);
+        }
     },
     filename: (_req, _file, cb) => {
-        cb(null, `lib-${Date.now()}-${(0, uuid_1.v4)()}.pdf`);
+        const ext = path_1.default.extname(_file.originalname || '').toLowerCase() || '.pdf';
+        const safeExt = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.zip'].includes(ext)
+            ? ext
+            : '.pdf';
+        cb(null, `lib-${Date.now()}-${(0, uuid_1.v4)()}${safeExt}`);
     },
 });
 const upload = (0, multer_1.default)({
     storage,
     limits: { fileSize: MAX_FILE_SIZE },
     fileFilter: (_req, file, cb) => {
-        const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-        if (!allowedTypes.includes(file.mimetype)) {
-            return cb(new Error('Only PDF, PNG, or JPEG files are allowed'));
+        if (!fileValidation_1.LIBRARY_ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+            return cb(new Error('Only PDF, Word, Excel, CSV, TXT, ZIP, PNG, or JPEG files are allowed'));
         }
         cb(null, true);
     },
 });
+function parseJsonField(raw, fallback) {
+    if (raw == null || raw === '')
+        return fallback;
+    if (typeof raw !== 'string')
+        return raw;
+    try {
+        return JSON.parse(raw);
+    }
+    catch {
+        throw { status: 400, expose: true, message: 'Invalid form data. Please try uploading again.' };
+    }
+}
 router.use(authenticate_1.authenticate);
 router.get('/', async (req, res, next) => {
     try {
@@ -103,13 +123,14 @@ router.post('/', upload.single('file'), async (req, res, next) => {
     try {
         if (!req.file)
             return res.status(400).json({ error: 'File is required' });
+        console.log(`[library-upload] user=${req.user.id} name=${req.file.originalname} size=${req.file.size} type=${req.file.mimetype}`);
         const docType = (0, fileValidation_1.getValidatedDocumentType)(req.file.path, req.file.mimetype);
         if (docType === 'reject') {
             try {
                 fs_1.default.unlinkSync(req.file.path);
             }
             catch { /* ignore */ }
-            return res.status(400).json({ error: 'File is invalid or corrupted. Only PDF, PNG, and JPEG are allowed.' });
+            return res.status(400).json({ error: 'File is invalid or corrupted. Allowed: PDF, Word, Excel, CSV, TXT, ZIP, PNG, JPEG.' });
         }
         const body = (req.body || {});
         const rawName = body.name || req.file.originalname;
@@ -122,8 +143,8 @@ router.post('/', upload.single('file'), async (req, res, next) => {
             folderId,
             date: body.date,
             visibility: body.visibility,
-            visibleToRoles: body.visibleToRoles ? JSON.parse(body.visibleToRoles) : undefined,
-            visibleToUserIds: body.visibleToUserIds ? JSON.parse(body.visibleToUserIds) : undefined,
+            visibleToRoles: parseJsonField(body.visibleToRoles, undefined),
+            visibleToUserIds: parseJsonField(body.visibleToUserIds, undefined),
         });
         // RAG: ingest in background so Frank can semantic-search this document
         if (result.filePath && process.env.VOYAGE_API_KEY) {
@@ -137,6 +158,12 @@ router.post('/', upload.single('file'), async (req, res, next) => {
         res.status(201).json(result);
     }
     catch (e) {
+        if (req.file?.path) {
+            try {
+                fs_1.default.unlinkSync(req.file.path);
+            }
+            catch { /* ignore */ }
+        }
         next(e);
     }
 });
@@ -150,7 +177,7 @@ router.put('/:id/file', upload.single('file'), async (req, res, next) => {
                 fs_1.default.unlinkSync(req.file.path);
             }
             catch { /* ignore */ }
-            return res.status(400).json({ error: 'File is invalid.' });
+            return res.status(400).json({ error: 'File is invalid or corrupted. Allowed: PDF, Word, Excel, CSV, TXT, ZIP, PNG, JPEG.' });
         }
         const result = await (0, libraryDocumentService_1.replaceLibraryDocumentFile)(req.params.id, req.user.id, req.user.role, req.file);
         // Re-ingest in background so Frank uses the new content

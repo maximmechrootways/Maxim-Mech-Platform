@@ -13,13 +13,17 @@ function errorHandler(err, req, res, _next) {
         }
         return res.status(400).json({ error: message });
     }
-    // Multer fileFilter passes a plain Error (no status) — avoid treating as 5xx.
+    // Multer fileFilter passes a plain Error (no status) — treat as bad request.
     const msg = typeof err?.message === 'string' ? err.message : '';
-    if (msg && !err?.status && !err?.statusCode && msg.includes('Allowed:')) {
+    if (msg &&
+        !err?.status &&
+        !err?.statusCode &&
+        (msg.includes('Allowed:') || msg.includes('Only PDF') || msg.includes('files are allowed'))) {
         return res.status(400).json({ error: msg });
     }
     const status = err?.statusCode || err?.status || 500;
     const message = err?.message || 'Internal server error';
+    const expose = Boolean(err?.expose);
     // Only log as ERROR for unexpected server errors (5xx)
     // 4xx are expected operational errors (e.g. 401 on /auth/refresh) — no need to log
     if (status >= 500) {
@@ -28,7 +32,9 @@ function errorHandler(err, req, res, _next) {
             console.error(err.stack);
     }
     const isProd = process.env.NODE_ENV === 'production';
+    const knownOps = /file storage failed|could not generate file|HTTPS is required|Invalid form data|Only PDF/i.test(message);
+    // Keep intentional operational messages visible to the client.
     res.status(status).json({
-        error: isProd && status >= 500 ? 'An unexpected error occurred' : message
+        error: isProd && status >= 500 && !expose && !knownOps ? 'An unexpected error occurred' : message
     });
 }

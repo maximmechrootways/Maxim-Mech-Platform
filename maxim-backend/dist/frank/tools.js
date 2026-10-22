@@ -1,6 +1,29 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getFrankTools = getFrankTools;
+const localDocumentService_1 = require("../services/localDocumentService");
+const SEARCH_LOCAL_DOCUMENTS_TOOL = {
+    name: 'search_local_documents',
+    description: 'Search the on-premises local archive (USB / field project folders). Finds passages inside text PDFs and also matches by file name, folder path, and project — so scanned/image drawings with no readable PDF text can still be found when the user names the drawing (e.g. "electrical drawing", sheet numbers in the filename). Prefer exact terms the user said (drawing title, discipline, project). Use alongside search_documents for cloud library files.',
+    input_schema: {
+        type: 'object',
+        properties: {
+            query: {
+                type: 'string',
+                description: 'Search query — use the exact terms the user mentioned (drawing names, electrical/mechanical, sheet numbers, project names)',
+            },
+            project: {
+                type: 'string',
+                description: 'Optional project name to restrict the search (partial match, e.g. "Dehumidification"). Use when the user names a job.',
+            },
+            limit: {
+                type: 'number',
+                description: 'Number of results to return (default 5, max 10)',
+            },
+        },
+        required: ['query'],
+    },
+};
 const TOOLS = [
     {
         name: 'query_people',
@@ -360,5 +383,8 @@ const TOOLS = [
     },
 ];
 function getFrankTools() {
+    if ((0, localDocumentService_1.isLocalDocumentStoreConfigured)()) {
+        return [...TOOLS, SEARCH_LOCAL_DOCUMENTS_TOOL];
+    }
     return TOOLS;
 }

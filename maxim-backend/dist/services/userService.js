@@ -310,13 +310,14 @@ async function listAllUsersForAdmin(userRole) {
         jobSupervisorLinks: u.jobSupervisorLinks,
     }));
 }
-/** Owner/HR: update employee (firstName, lastName, phone, jobTitle, department, role, employmentStatus, onLeaveStartedAt, terminatedAt, isActive) */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Owner/HR: update employee (email, firstName, lastName, phone, jobTitle, department, role, employmentStatus, onLeaveStartedAt, terminatedAt, isActive) */
 async function updateUserForAdmin(adminRole, targetUserId, data) {
     if (adminRole !== 'owner' && adminRole !== 'hr')
         throw { status: 403, message: 'Only Owner or HR can update employees' };
     const existing = await prisma_1.prisma.user.findUnique({
         where: { id: targetUserId },
-        select: { id: true, role: true },
+        select: { id: true, role: true, email: true },
     });
     if (!existing)
         throw { status: 404, message: 'User not found' };
@@ -326,6 +327,24 @@ async function updateUserForAdmin(adminRole, targetUserId, data) {
         }
     }
     const updateData = {};
+    let nextEmail = null;
+    if (data.email !== undefined) {
+        const normalized = data.email.trim().toLowerCase();
+        if (!normalized || !EMAIL_RE.test(normalized) || normalized.length > 254) {
+            throw { status: 400, message: 'Enter a valid email address' };
+        }
+        if (normalized !== existing.email.toLowerCase()) {
+            const taken = await prisma_1.prisma.user.findUnique({
+                where: { email: normalized },
+                select: { id: true },
+            });
+            if (taken && taken.id !== targetUserId) {
+                throw { status: 409, message: 'Another employee already uses that email' };
+            }
+            updateData.email = normalized;
+            nextEmail = normalized;
+        }
+    }
     if (data.firstName !== undefined)
         updateData.firstName = data.firstName.trim();
     if (data.lastName !== undefined)
@@ -513,8 +532,18 @@ async function updateUserForAdmin(adminRole, targetUserId, data) {
             });
         }
         else {
+            const code = err?.code;
+            if (code === 'P2002' && nextEmail) {
+                throw { status: 409, message: 'Another employee already uses that email' };
+            }
             throw err;
         }
+    }
+    if (nextEmail && existing.email && nextEmail !== existing.email.toLowerCase()) {
+        await prisma_1.prisma.inviteCode.updateMany({
+            where: { email: existing.email.toLowerCase(), isUsed: false },
+            data: { email: nextEmail },
+        });
     }
     return {
         id: updated.id,

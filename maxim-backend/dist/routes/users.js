@@ -229,6 +229,7 @@ router.patch('/:id', (0, requireRole_1.requireRole)('hr', 'owner'), async (req, 
         const targetId = req.params.id;
         const body = req.body;
         const user = await (0, userService_1.updateUserForAdmin)(req.user.role, targetId, {
+            email: body.email,
             firstName: body.firstName,
             lastName: body.lastName,
             phone: body.phone,

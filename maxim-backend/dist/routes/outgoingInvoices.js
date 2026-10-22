@@ -88,6 +88,8 @@ router.patch('/:id', async (req, res, next) => {
             projectName: str('projectName'),
             jobId: body.jobId === null || body.jobId === '' ? null : str('jobId'),
             paid: body.paid === true ? true : body.paid === false ? false : undefined,
+            reviewed: body.reviewed === true ? true : body.reviewed === false ? false : undefined,
+            reviewedById: req.user?.id ?? null,
             paymentTerms: str('paymentTerms'),
             notes: str('notes'),
         }));
@@ -182,6 +184,7 @@ router.get('/', async (req, res, next) => {
         const dateFrom = typeof req.query.dateFrom === 'string' ? req.query.dateFrom : undefined;
         const dateTo = typeof req.query.dateTo === 'string' ? req.query.dateTo : undefined;
         const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+        const reviewed = typeof req.query.reviewed === 'string' ? req.query.reviewed : undefined;
         const sort = typeof req.query.sort === 'string' ? req.query.sort : undefined;
         const limit = req.query.limit ? Number(req.query.limit) : undefined;
         const offset = req.query.offset ? Number(req.query.offset) : undefined;
@@ -199,6 +202,7 @@ router.get('/', async (req, res, next) => {
             minTotal: Number.isFinite(minTotal) ? minTotal : undefined,
             maxTotal: Number.isFinite(maxTotal) ? maxTotal : undefined,
             status,
+            reviewed,
             sort,
             limit,
             offset,

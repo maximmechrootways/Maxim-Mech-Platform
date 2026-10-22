@@ -15,6 +15,12 @@ const invoiceComposioGmailService_1 = require("../integrations/composio-invoice/
 const invoicePdfText_1 = require("../lib/invoicePdfText");
 const outgoingInvoiceAiService_1 = require("./outgoingInvoiceAiService");
 const outgoingInvoiceExtractionService_1 = require("./outgoingInvoiceExtractionService");
+function displayName(user) {
+    if (!user)
+        return null;
+    const name = `${user.firstName} ${user.lastName}`.trim();
+    return name || null;
+}
 function decimalToString(value) {
     if (value == null)
         return null;
@@ -70,6 +76,10 @@ async function listOutgoingInvoices(params) {
     const where = {};
     if (params.status)
         where.status = params.status;
+    if (params.reviewed === 'reviewed')
+        where.reviewedAt = { not: null };
+    else if (params.reviewed === 'unreviewed')
+        where.reviewedAt = null;
     if (params.customer)
         where.customerName = { contains: params.customer, mode: 'insensitive' };
     if (params.q) {
@@ -116,6 +126,7 @@ async function listOutgoingInvoices(params) {
             include: {
                 _count: { select: { attachments: true } },
                 job: { select: { id: true, title: true } },
+                reviewedBy: { select: { id: true, firstName: true, lastName: true } },
                 attachments: {
                     orderBy: { attachmentIndex: 'asc' },
                     select: { id: true, originalName: true },
@@ -142,6 +153,9 @@ async function listOutgoingInvoices(params) {
         jobId: row.jobId,
         jobTitle: row.job?.title ?? null,
         paidAt: row.paidAt?.toISOString() ?? null,
+        reviewedAt: row.reviewedAt?.toISOString() ?? null,
+        reviewedById: row.reviewedById,
+        reviewedByName: displayName(row.reviewedBy),
         paymentTerms: row.paymentTerms,
         notes: row.notes,
         status: row.status,
@@ -156,6 +170,7 @@ async function getOutgoingInvoiceDetail(id) {
         include: {
             attachments: { orderBy: { attachmentIndex: 'asc' } },
             job: { select: { id: true, title: true } },
+            reviewedBy: { select: { id: true, firstName: true, lastName: true } },
         },
     });
     if (!invoice) {
@@ -187,6 +202,9 @@ async function getOutgoingInvoiceDetail(id) {
         jobId: invoice.jobId,
         jobTitle: invoice.job?.title ?? null,
         paidAt: invoice.paidAt?.toISOString() ?? null,
+        reviewedAt: invoice.reviewedAt?.toISOString() ?? null,
+        reviewedById: invoice.reviewedById,
+        reviewedByName: displayName(invoice.reviewedBy),
         paymentTerms: invoice.paymentTerms,
         notes: invoice.notes,
         extractedData: invoice.extractedData,
@@ -311,6 +329,19 @@ async function updateOutgoingInvoice(id, input) {
     else if (input.paidAmount !== undefined) {
         paidAmount = optionalDecimal(input.paidAmount ?? undefined);
     }
+    let reviewedAt;
+    let reviewedById;
+    if (input.reviewed === true) {
+        if (!input.reviewedById) {
+            throw Object.assign(new Error('Reviewer is required'), { status: 400 });
+        }
+        reviewedAt = new Date();
+        reviewedById = input.reviewedById;
+    }
+    else if (input.reviewed === false) {
+        reviewedAt = null;
+        reviewedById = null;
+    }
     const totalAmount = input.totalAmount !== undefined
         ? optionalDecimal(input.totalAmount ?? undefined)
         : existing.totalAmount;
@@ -342,6 +373,8 @@ async function updateOutgoingInvoice(id, input) {
             projectName: input.projectName !== undefined ? (input.projectName?.trim() || null) : undefined,
             jobId: input.jobId !== undefined ? (input.jobId || null) : undefined,
             paidAt: paidAt !== undefined ? paidAt : undefined,
+            reviewedAt: reviewedAt !== undefined ? reviewedAt : undefined,
+            reviewedById: reviewedById !== undefined ? reviewedById : undefined,
             paymentTerms: input.paymentTerms !== undefined ? (input.paymentTerms?.trim() || null) : undefined,
             notes: input.notes !== undefined ? (input.notes?.trim() || null) : undefined,
             status,
