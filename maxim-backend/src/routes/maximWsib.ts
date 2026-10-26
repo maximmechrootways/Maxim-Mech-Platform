@@ -47,6 +47,38 @@ function userDisplayName(user: Express.Request['user']) {
     return `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || u?.email || 'HR'
 }
 
+/** Rename multer .tmp to the validated extension so blob storage gets the correct content-type. */
+function renameValidatedUpload(
+    file: Express.Multer.File,
+    validated: string
+): Express.Multer.File {
+    const ext = validated === 'jpeg' ? 'jpg' : validated
+    const safeName = `wsib-${Date.now()}-${uuidv4()}.${ext}`
+    const newPath = path.join(uploadDir, safeName)
+    fs.renameSync(file.path, newPath)
+    file.path = newPath
+    file.filename = safeName
+    return file
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+    '.pdf': 'application/pdf',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.csv': 'text/csv',
+}
+
+function contentTypeForFileName(fileName: string | undefined, fallback: string): string {
+    const ext = path.extname(fileName || '').toLowerCase()
+    if (ext && MIME_BY_EXT[ext]) return MIME_BY_EXT[ext]
+    if (fallback && fallback !== 'application/octet-stream') return fallback
+    return 'application/octet-stream'
+}
+
 router.use(authenticate)
 
 router.get('/', async (req, res, next) => {
@@ -77,6 +109,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
             try { fs.unlinkSync(req.file.path) } catch { /* ignore */ }
             return res.status(400).json({ error: 'File content invalid. Allowed: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, CSV.' })
         }
+        renameValidatedUpload(req.file, validated)
         const blobName = await uploadBlob(req.file.path, 'company_wsib')
         const body = (req.body || {}) as any
         const doc = await createMaximWsibDocument(
@@ -111,6 +144,7 @@ router.patch('/:id', upload.single('file'), async (req, res, next) => {
                 try { fs.unlinkSync(req.file.path) } catch { /* ignore */ }
                 return res.status(400).json({ error: 'File content invalid. Allowed: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, CSV.' })
             }
+            renameValidatedUpload(req.file, validated)
             const blobName = await uploadBlob(req.file.path, 'company_wsib')
             body.fileName = sanitizeWsibDocumentName(req.file.originalname)
             body.filePath = blobName
@@ -134,7 +168,9 @@ router.get('/:id/file', async (req, res, next) => {
         if (!blobRes.ok) return res.status(404).json({ error: 'File not found' })
 
         const asDownload = String(req.query.download || '').toLowerCase() === 'true'
-        const mime = blobRes.headers.get('content-type') || 'application/octet-stream'
+        const blobMime = blobRes.headers.get('content-type') || 'application/octet-stream'
+        // Prefer extension from stored display name so older .tmp uploads still preview as PDF/etc.
+        const mime = contentTypeForFileName(doc.fileName, blobMime)
         const disposition = asDownload ? 'attachment' : 'inline'
         const safeName = String(doc.fileName || 'wsib-document').replace(/"/g, '')
         res.setHeader('Content-Type', mime)

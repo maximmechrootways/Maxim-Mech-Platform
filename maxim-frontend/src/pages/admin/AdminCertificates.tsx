@@ -583,10 +583,30 @@ export function AdminCertificates() {
     }
   };
 
+  const wsibMimeFromFileName = (fileName?: string) => {
+    const ext = (fileName || "").split(".").pop()?.toLowerCase();
+    const map: Record<string, string> = {
+      pdf: "application/pdf",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ppt: "application/vnd.ms-powerpoint",
+      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      csv: "text/csv",
+    };
+    return (ext && map[ext]) || undefined;
+  };
+
   const handleWsibViewFile = async (doc: MaximWsibDocument) => {
     try {
       const blob = await maximWsibApi.fetchMaximWsibFileBlob(doc.id);
-      quickViewBlob(blob);
+      const mime = wsibMimeFromFileName(doc.fileName);
+      const typed =
+        mime && (!blob.type || blob.type === "application/octet-stream")
+          ? new Blob([blob], { type: mime })
+          : blob;
+      quickViewBlob(typed);
     } catch {
       setWsibError("Could not open file");
     }
