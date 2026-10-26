@@ -22,7 +22,7 @@ containerClient.createIfNotExists().catch((err: any) => {
 
 export async function uploadBlob(
     localFilePath: string,
-    folder: 'templates' | 'documents' | 'signatures' | 'employee_documents' | 'inspection_attachments' | 'equipment' | 'estimation_pricing' = 'templates'
+    folder: 'templates' | 'documents' | 'signatures' | 'employee_documents' | 'inspection_attachments' | 'equipment' | 'estimation_pricing' | 'company_wsib' = 'templates'
 ): Promise<string> {
     const ext = path.extname(localFilePath) || '.pdf'
     const lowerExt = ext.toLowerCase()
@@ -40,6 +40,8 @@ export async function uploadBlob(
         '.csv': 'text/csv',
         '.txt': 'text/plain',
         '.zip': 'application/zip',
+        '.ppt': 'application/vnd.ms-powerpoint',
+        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     }
     const detectedContentType = byExt[lowerExt] || 'application/octet-stream'
     const blobName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 10)}${ext}`

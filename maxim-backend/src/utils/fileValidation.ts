@@ -72,6 +72,8 @@ export type ValidatedFileType =
     | 'docx'
     | 'xls'
     | 'xlsx'
+    | 'ppt'
+    | 'pptx'
     | 'csv'
     | 'txt'
     | 'zip'
@@ -86,6 +88,8 @@ export const LIBRARY_ALLOWED_MIME_TYPES = [
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'text/csv',
     'text/plain',
     'application/csv',
@@ -93,7 +97,22 @@ export const LIBRARY_ALLOWED_MIME_TYPES = [
     'application/x-zip-compressed',
 ] as const
 
-const SAFE_EXTS = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.zip']
+/** Allowed MIME types for Maxim company WSIB document uploads */
+export const WSIB_ALLOWED_MIME_TYPES = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/csv',
+    'application/csv',
+    'text/plain',
+] as const
+
+const SAFE_EXTS = ['.pdf', '.png', '.jpg', '.jpeg', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.csv', '.txt', '.zip']
+const WSIB_SAFE_EXTS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.csv']
 
 /**
  * Validate file content by magic bytes. Returns allowed type or 'reject'.
@@ -117,12 +136,21 @@ export function getValidatedDocumentType(filePath: string, mimetype: string): Va
     ) {
         return 'xlsx'
     }
+    if (
+        mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' &&
+        isZipByMagic(filePath)
+    ) {
+        return 'pptx'
+    }
     if ((mime === 'application/zip' || mime === 'application/x-zip-compressed') && isZipByMagic(filePath)) {
         return 'zip'
     }
     if (mime === 'application/msword' && isOleByMagic(filePath)) return 'doc'
     if (mime === 'application/vnd.ms-excel' && (isOleByMagic(filePath) || isZipByMagic(filePath))) {
         return 'xls'
+    }
+    if (mime === 'application/vnd.ms-powerpoint' && (isOleByMagic(filePath) || isZipByMagic(filePath))) {
+        return 'ppt'
     }
     if (
         (mime === 'text/csv' || mime === 'application/csv' || mime === 'text/plain') &&
@@ -147,4 +175,23 @@ export function sanitizeDocumentName(name: string | undefined): string {
     const finalExt = SAFE_EXTS.includes(ext) ? ext : '.pdf'
     const withoutExt = safe.replace(/\.[^.]*$/, '').trim() || 'document'
     return `${withoutExt}${finalExt}`
+}
+
+/** Sanitize display name for Maxim WSIB uploads (pdf/office/csv only). */
+export function sanitizeWsibDocumentName(name: string | undefined): string {
+    if (!name || typeof name !== 'string') return 'wsib-document.pdf'
+    const base = path.basename(name).replace(/\s+/g, ' ').trim()
+    const safe = base.replace(/[^a-zA-Z0-9._\-\s]/g, '').slice(0, 200) || 'wsib-document'
+    const ext = path.extname(safe).toLowerCase()
+    const finalExt = WSIB_SAFE_EXTS.includes(ext) ? ext : '.pdf'
+    const withoutExt = safe.replace(/\.[^.]*$/, '').trim() || 'wsib-document'
+    return `${withoutExt}${finalExt}`
+}
+
+/** Validate WSIB upload content; rejects images/zip/executables. */
+export function getValidatedWsibDocumentType(filePath: string, mimetype: string): ValidatedFileType {
+    const validated = getValidatedDocumentType(filePath, mimetype)
+    const allowed: ValidatedFileType[] = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv']
+    if (!allowed.includes(validated)) return 'reject'
+    return validated
 }

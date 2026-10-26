@@ -117,6 +117,9 @@ export async function checkAndNotifyHrExpiryAlerts() {
         where: { expiresAt: { not: null } },
         include: { employee: { select: { firstName: true, lastName: true } } },
     })
+    const maximWsibDocuments = await prisma.maximWsibDocument.findMany({
+        select: { id: true, title: true, documentType: true, expirationDate: true },
+    })
 
     const work: Array<{ title: string; body: string; dedupeKey: string; daily: boolean }> = []
 
@@ -238,6 +241,27 @@ export async function checkAndNotifyHrExpiryAlerts() {
                 daysBefore: alert.daysBefore,
             }),
             dedupeKey: `expiry:employee-document:${doc.id}:${state}:${alert.daysBefore ?? 'expired'}`,
+            daily: false,
+        })
+    }
+
+    for (const d of maximWsibDocuments) {
+        const dateText = normalizeDate(d.expirationDate)
+        if (!dateText) continue
+        const alert = getAlertState(dateText)
+        if (!alert) continue
+        const state = alert.state
+        work.push({
+            title: `Maxim WSIB document ${state === 'expired' ? 'expired' : `expiring in ${alert.daysBefore} day${alert.daysBefore === 1 ? '' : 's'}`}`,
+            body: buildNotificationMessage({
+                itemType: 'Maxim WSIB document',
+                itemName: d.title || d.documentType,
+                ownerLabel: 'Maxim',
+                expiryDate: dateText,
+                state,
+                daysBefore: alert.daysBefore,
+            }),
+            dedupeKey: `expiry:maxim-wsib:${d.id}:${state}:${alert.daysBefore ?? 'expired'}`,
             daily: false,
         })
     }

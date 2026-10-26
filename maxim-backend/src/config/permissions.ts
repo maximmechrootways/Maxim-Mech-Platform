@@ -30,6 +30,7 @@ export const PERMISSIONS: FeaturePermission[] = [
     { feature: 'hr_todo', label: 'HR Todo', viewRoles: ['owner', 'hr'], manageRoles: ['owner', 'hr'] },
     { feature: 'injury_reports', label: 'Injury Reports', viewRoles: ['owner', 'hr', 'supervisor'], manageRoles: ['owner', 'hr', 'supervisor'] },
     { feature: 'certificates', label: 'Certificates', viewRoles: ['owner', 'hr', 'supervisor'], manageRoles: ['owner', 'hr'] },
+    { feature: 'maxim_wsib', label: 'Maxim WSIB Documents', viewRoles: ['owner', 'hr'], manageRoles: ['owner', 'hr'] },
     { feature: 'documents', label: 'Documents', viewRoles: ['owner', 'hr', 'supervisor', 'labourer', 'user'], manageRoles: ['owner', 'hr', 'supervisor'] },
     { feature: 'library_documents', label: 'Library Documents', viewRoles: ['owner', 'hr', 'supervisor', 'labourer', 'user'], manageRoles: ['owner', 'hr'] },
     { feature: 'templates', label: 'Templates & Signable Forms', viewRoles: ['owner', 'hr'], manageRoles: ['owner', 'hr'] },

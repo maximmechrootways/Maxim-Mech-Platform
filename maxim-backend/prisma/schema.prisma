@@ -1036,6 +1036,26 @@ model TrainingCourseType {
   @@index([name])
 }
 
+// Maxim company WSIB / compliance documents (Owner + HR only; current file only, no version history)
+model MaximWsibDocument {
+  id             String   @id @default(uuid())
+  title          String
+  documentType   String   @default("Other") // WSIB Clearance | CAD-7 | NEER | Other
+  issueDate      String? // YYYY-MM-DD
+  expirationDate String? // YYYY-MM-DD
+  fileName       String
+  filePath       String
+  uploadedById   String
+  uploadedBy     String
+  uploadedAt     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  notes          String?
+
+  @@index([expirationDate])
+  @@index([documentType])
+  @@index([uploadedById])
+}
+
 // --- Safety & compliance (incidents, near-miss, hazards, observations, CAPA, alerts, inspections, calendar) ---
 
 model Incident {
