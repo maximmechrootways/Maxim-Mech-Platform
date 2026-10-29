@@ -286,12 +286,17 @@ export function JobDetail() {
           <CardHeader>Subcontractors on This Job</CardHeader>
           <CardDescription>External companies assigned to this job/site. Compliance score reflects certs and insurance.</CardDescription>
           <ul className="mt-4 space-y-3">
-            {job.subcontractors.map((s: any) => (
+            {job.subcontractors.map((s: any) => {
+              const isInactive = String(s.status ?? '').toLowerCase() === 'inactive'
+              return (
               <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-xl bg-neutral-50 dark:bg-neutral-700/50">
                 <div>
-                  <Link to={`/subcontractors/${s.id}`} className="text-brand-600 dark:text-brand-400 hover:underline font-medium">
-                    {s.companyName}
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link to={`/subcontractors/${s.id}`} className="text-brand-600 dark:text-brand-400 hover:underline font-medium">
+                      {s.companyName}
+                    </Link>
+                    {isInactive && <Badge variant="default">inactive</Badge>}
+                  </div>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Compliance Score</span>
                     {s.compliant === true ? (
@@ -306,7 +311,8 @@ export function JobDetail() {
                   </div>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         </Card>
       )}

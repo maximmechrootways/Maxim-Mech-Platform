@@ -366,7 +366,11 @@ export function SiteDetail() {
   }
 
   const assignedSubcontractorIds = (job?.subcontractors ?? []).map((s: any) => s.id)
-  const subcontractorsNotOnJob = subcontractors.filter((s) => !assignedSubcontractorIds.includes(s.id))
+  const subcontractorsNotOnJob = subcontractors.filter(
+    (s) =>
+      !assignedSubcontractorIds.includes(s.id) &&
+      String(s.status ?? '').toLowerCase() === 'active'
+  )
   const assignSubcontractorsBulk = async (subIds: string[]) => {
     if (!job?.id || subIds.length === 0) return
     setActionLoading('assign-bulk-subcontractors')
@@ -1015,6 +1019,10 @@ export function SiteDetail() {
                       <li className="text-sm text-neutral-500 dark:text-neutral-400">No subcontractors assigned.</li>
                     ) : (
                       job.subcontractors.map((s: any) => {
+                        // Prefer job payload status; fall back to master list from Subcontractors page
+                        const masterStatus = subcontractors.find((sub) => sub.id === s.id)?.status
+                        const status = String(s.status ?? masterStatus ?? 'active').toLowerCase()
+                        const isInactive = status !== 'active'
                         // find personnel assigned to this job from this subcontractor
                         const assignedWorkerIds = personnelJobAssignments.filter((a: any) => a.jobId === job.id).map((a: any) => a.personnelId)
                         const assignedWorkers = personnel.filter((p: any) => p.subcontractorId === s.id && assignedWorkerIds.includes(p.id))
@@ -1025,12 +1033,15 @@ export function SiteDetail() {
                         )
 
                         return (
-                          <li key={s.id} className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
+                          <li key={s.id} className={`p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 ${isInactive ? 'opacity-80' : ''}`}>
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-3 border-b border-neutral-200 dark:border-neutral-700">
                               <div>
-                                <Link to={`/subcontractors/${s.id}`} className="text-brand-600 dark:text-brand-400 hover:underline font-bold text-lg">
-                                  {s.companyName}
-                                </Link>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Link to={`/subcontractors/${s.id}`} className="text-brand-600 dark:text-brand-400 hover:underline font-bold text-lg">
+                                    {s.companyName}
+                                  </Link>
+                                  {isInactive && <Badge variant="default">inactive</Badge>}
+                                </div>
                                 <div className="mt-1 flex items-center gap-2">
                                   <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Company Compliance:</span>
                                   {s.compliant === true ? (
@@ -1039,6 +1050,11 @@ export function SiteDetail() {
                                     <Badge variant="danger">Attention Needed</Badge>
                                   )}
                                 </div>
+                                {isInactive && (
+                                  <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                                    Inactive on the Subcontractors page — shown for history; workforce changes are disabled. You can still remove this company from the job.
+                                  </p>
+                                )}
                               </div>
                               <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => removeSubcontractorFromJob(s.id)} disabled={!!actionLoading}>Remove</Button>
                             </div>
@@ -1064,7 +1080,7 @@ export function SiteDetail() {
                                             ) : (
                                               <Badge variant="default">Not completed</Badge>
                                             )}
-                                            {isOwnerOrHr && assignment?.id && (
+                                            {isOwnerOrHr && assignment?.id && !isInactive && (
                                               <Button
                                                 size="sm"
                                                 variant="ghost"
@@ -1082,7 +1098,7 @@ export function SiteDetail() {
                                   })}
                                 </ul>
                               )}
-                              {isOwnerOrHr && (
+                              {isOwnerOrHr && !isInactive && (
                                 <div className="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-600">
                                   <label className="flex flex-col gap-1.5 sm:flex-row sm:items-end gap-2">
                                     <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Add worker to this job</span>

@@ -861,6 +861,15 @@ export async function addPersonnelJobAssignment(
         throw { status: 403, message: 'Only Owner, HR, or assigned Supervisor can assign jobs' }
     }
 
+    const subcontractor = await prisma.subcontractor.findUnique({
+        where: { id: subcontractorId },
+        select: { id: true, status: true },
+    })
+    if (!subcontractor) throw { status: 404, message: 'Subcontractor not found' }
+    if (String(subcontractor.status).toLowerCase() !== 'active') {
+        throw { status: 400, message: 'Cannot assign personnel for an inactive subcontractor' }
+    }
+
     const personnel = await prisma.subcontractorPersonnel.findUnique({
         where: { id: personnelId },
         select: { id: true, subcontractorId: true },

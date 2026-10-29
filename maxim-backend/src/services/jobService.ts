@@ -208,6 +208,7 @@ export async function getJobById(id: string, userId: string, userRole: string) {
         subcontractors: job.subcontractors.map((s) => ({
             id: s.subcontractor.id,
             companyName: s.subcontractor.companyName,
+            status: s.subcontractor.status,
         })),
     }
 }
@@ -310,6 +311,9 @@ export async function addSubcontractor(jobId: string, userId: string, userRole: 
     if (!job) throw { status: 404, message: 'Job not found' }
     const sub = await prisma.subcontractor.findUnique({ where: { id: body.subcontractorId } })
     if (!sub) throw { status: 404, message: 'Subcontractor not found' }
+    if (String(sub.status).toLowerCase() !== 'active') {
+        throw { status: 400, message: 'Cannot assign an inactive subcontractor to a job' }
+    }
     await prisma.subcontractorJobAssignment.upsert({
         where: { jobId_subcontractorId: { jobId, subcontractorId: body.subcontractorId } },
         create: { jobId, subcontractorId: body.subcontractorId, assignedById: userId },
