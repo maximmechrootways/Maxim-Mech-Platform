@@ -5,7 +5,7 @@ import { useEmployees } from '@/contexts/EmployeesContext'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { fetchLibraryDocuments, uploadLibraryDocument, getLibraryDocumentFileUrl } from '@/api/library'
+import { fetchLibraryDocuments, uploadLibraryDocument, updateLibraryDocument } from '@/api/library'
 import { fetchCertificates } from '@/api/certificates'
 import { listDailyHazardSubmissions } from '@/api/dailyHazardAnalysis'
 import { fetchQualityFindingsSummary } from '@/api/qualityFindings'
@@ -43,6 +43,8 @@ export function ManagementReview() {
   const [filterCategory, setFilterCategory] = useState('all')
   const [docName, setDocName] = useState('')
   const [bulkStatus, setBulkStatus] = useState<Array<{ name: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string }>>([])
+  const [updatingCategoryId, setUpdatingCategoryId] = useState<string | null>(null)
+  const [categoryError, setCategoryError] = useState<string | null>(null)
 
   // KPI data
   const [kpiData, setKpiData] = useState({
@@ -153,9 +155,32 @@ export function ManagementReview() {
     e.target.value = ''
   }
 
-  const handleViewDoc = (id: string) => {
-    const url = getLibraryDocumentFileUrl(id)
-    window.open(url, '_blank')
+  const handleCategoryChange = async (docId: string, categoryKey: string) => {
+    const previous = documents.find((d) => d.id === docId)
+    if (!previous || previous.category === categoryKey) return
+    setCategoryError(null)
+    setUpdatingCategoryId(docId)
+    setDocuments((prev) =>
+      prev.map((d) =>
+        d.id === docId
+          ? { ...d, category: categoryKey, type: `management-review:${categoryKey}` }
+          : d
+      )
+    )
+    try {
+      await updateLibraryDocument(docId, { type: `management-review:${categoryKey}` })
+    } catch (err: any) {
+      setDocuments((prev) =>
+        prev.map((d) =>
+          d.id === docId
+            ? { ...d, category: previous.category, type: previous.type }
+            : d
+        )
+      )
+      setCategoryError(err?.response?.data?.error ?? 'Failed to update category')
+    } finally {
+      setUpdatingCategoryId(null)
+    }
   }
 
   if (!isOwnerOrHr) return null
@@ -431,7 +456,12 @@ export function ManagementReview() {
                           {doc.uploadedBy && <> · by {doc.uploadedBy}</>}
                         </p>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => handleViewDoc(doc.id)}>View</Button>
+                      <Link
+                        to={`/documents/${doc.id}`}
+                        className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                      >
+                        View
+                      </Link>
                     </div>
                   </li>
                 )
@@ -458,6 +488,11 @@ export function ManagementReview() {
             </Button>
           )}
         </div>
+        {categoryError && (
+          <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 text-sm text-red-600 dark:text-red-400">
+            {categoryError}
+          </div>
+        )}
         <div className="mt-4 overflow-x-auto">
           {loading ? (
             <div className="py-12 text-center text-neutral-500 dark:text-neutral-400 animate-pulse">Loading documents…</div>
@@ -492,9 +527,19 @@ export function ManagementReview() {
                         </div>
                       </td>
                       <td className="py-3 pr-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border ${catInfo?.color || 'bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700'}`}>
-                          {catInfo?.label || 'Other'}
-                        </span>
+                        <select
+                          value={doc.category || 'other'}
+                          onChange={(e) => void handleCategoryChange(doc.id, e.target.value)}
+                          disabled={updatingCategoryId === doc.id}
+                          aria-label={`Category for ${doc.name}`}
+                          className={`min-w-[10rem] max-w-[14rem] px-2.5 py-1.5 rounded-lg text-xs font-medium border bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white disabled:opacity-60 ${catInfo?.color || 'border-neutral-200 dark:border-neutral-700'}`}
+                        >
+                          {REVIEW_CATEGORIES.map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="py-3 pr-4 text-sm text-neutral-600 dark:text-neutral-400">
                         {doc.uploadedAt
@@ -509,13 +554,12 @@ export function ManagementReview() {
                         )}
                       </td>
                       <td className="py-3 pr-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleViewDoc(doc.id)}
+                        <Link
+                          to={`/documents/${doc.id}`}
                           className="text-brand-600 dark:text-brand-400 hover:underline text-sm font-medium"
                         >
                           View
-                        </button>
+                        </Link>
                       </td>
                     </tr>
                   )

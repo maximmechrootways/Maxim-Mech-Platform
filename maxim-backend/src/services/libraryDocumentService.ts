@@ -174,6 +174,7 @@ export async function updateLibraryDocument(id: string, userId: string, userRole
     lastOpenedBy?: string
     folderId?: string | null
     name?: string
+    type?: string
 }) {
     if (!isOwnerOrHr(userRole)) throw { status: 403, message: 'Forbidden' }
     const doc = await prisma.libraryDocument.findUnique({ where: { id } })
@@ -184,6 +185,11 @@ export async function updateLibraryDocument(id: string, userId: string, userRole
     if (data.visibleToUserIds !== undefined) updateData.visibleToUserIds = data.visibleToUserIds
     if (data.lastOpenedAt !== undefined) updateData.lastOpenedAt = new Date(data.lastOpenedAt)
     if (data.lastOpenedBy !== undefined) updateData.lastOpenedBy = data.lastOpenedBy
+    if (data.type !== undefined) {
+        const trimmed = data.type.trim()
+        if (!trimmed) throw { status: 400, message: 'Document type is required' }
+        updateData.type = trimmed
+    }
     if (data.name !== undefined) {
         const trimmed = data.name.trim()
         if (!trimmed) throw { status: 400, message: 'Document name is required' }

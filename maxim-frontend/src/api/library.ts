@@ -308,7 +308,19 @@ export async function fetchLibraryDocumentsByJob(
   return data;
 }
 
-export async function updateLibraryDocument(id: string, payload: any) {
+export async function updateLibraryDocument(
+  id: string,
+  payload: {
+    name?: string;
+    type?: string;
+    visibility?: string;
+    visibleToRoles?: string[];
+    visibleToUserIds?: string[];
+    folderId?: string | null;
+    lastOpenedAt?: string;
+    lastOpenedBy?: string;
+  },
+) {
   const { data } = await api.patch(`/documents/library/${id}`, payload);
   return data;
 }
