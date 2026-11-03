@@ -8,6 +8,7 @@ import * as hazardsApi from '@/api/hazards'
 import * as injuryReportsApi from '@/api/injuryReports'
 import { fetchToolboxTalkSummary, fetchAssignedPersonnelSubmissionsByJob, type AssignedPersonnelSubmission } from '@/api/library'
 import { ProjectDocumentsSection } from '@/pages/safety/ProjectDocumentsSection'
+import { ProjectMemosSection } from '@/pages/safety/ProjectMemosSection'
 import { useUser } from '@/contexts/UserContext'
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
@@ -33,6 +34,7 @@ export function ProjectDashboard() {
   const [openSafetyPulse, setOpenSafetyPulse] = useState(true)
   const [openPersonnel, setOpenPersonnel] = useState(true)
   const [openDocs, setOpenDocs] = useState(true)
+  const [openMemos, setOpenMemos] = useState(true)
   const [openSubmittedForms, setOpenSubmittedForms] = useState(true)
 
   const isOwnerOrHr = user?.role === 'owner' || user?.role === 'hr'
@@ -680,6 +682,28 @@ export function ProjectDashboard() {
               <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Click to open Personnel page</div>
             </Link>
           </div>
+        )}
+      </Card>
+
+      <Card padding="lg">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardHeader className="mb-0">Memos / Notices</CardHeader>
+            <CardDescription>
+              Project-specific memos and notices. Owner and HR can upload documents for the team to review.
+            </CardDescription>
+          </div>
+          <button
+            type="button"
+            className="text-sm text-neutral-600 dark:text-neutral-300 hover:underline"
+            onClick={() => setOpenMemos((o) => !o)}
+          >
+            {openMemos ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
+
+        {openMemos && jobId && (
+          <ProjectMemosSection jobId={jobId} canManage={isOwnerOrHr} />
         )}
       </Card>
 

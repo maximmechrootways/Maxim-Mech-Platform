@@ -15,10 +15,12 @@ import {
   type ProjectDocumentFolderPathItem,
 } from '@/api/library'
 import { downloadBlob, quickViewBlob } from '@/utils/fileActions'
+import { isProjectMemoDocumentType } from '@/pages/safety/ProjectMemosSection'
 
 type ProjectDoc = {
   id: string
   name: string
+  type?: string
   uploadedBy: string
   createdAt?: string
 }
@@ -60,7 +62,12 @@ export function ProjectDocumentsSection({ jobId, canManage }: Props) {
         currentFolderId ? fetchProjectDocumentFolderPath(jobId, currentFolderId) : Promise.resolve([]),
       ])
       setFolders(Array.isArray(folderRows) ? folderRows : [])
-      setDocuments(Array.isArray(docRows) ? docRows : [])
+      // Keep project memos/notices in their own bucket, not mixed into Project Documents.
+      setDocuments(
+        (Array.isArray(docRows) ? docRows : []).filter(
+          (d: ProjectDoc) => !isProjectMemoDocumentType(d.type),
+        ),
+      )
       setBreadcrumb(Array.isArray(pathRows) ? pathRows : [])
     } catch (err: unknown) {
       const msg =
