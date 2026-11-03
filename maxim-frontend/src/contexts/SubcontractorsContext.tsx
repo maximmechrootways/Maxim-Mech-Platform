@@ -35,8 +35,8 @@ interface SubcontractorsContextValue {
   addCertification: (cert: Omit<SubcontractorCertification, 'id' | 'status'>) => SubcontractorCertification
   updateCertification: (id: string, updates: Partial<Pick<SubcontractorCertification, 'name' | 'issuedAt' | 'expiresAt'>>) => void
   removeCertification: (id: string) => void
-  addJobAssignment: (assignment: Omit<SubcontractorJobAssignment, 'id'>) => void
-  removeJobAssignment: (id: string) => void
+  addJobAssignment: (assignment: Omit<SubcontractorJobAssignment, 'id'>) => Promise<void>
+  removeJobAssignment: (id: string, fallback?: { jobId: string; subcontractorId: string }) => Promise<void>
   // Contractor personnel (workers) and their job assignments
   personnel: SubcontractorPersonnel[]
   personnelCertifications: SubcontractorPersonnelCertification[]
@@ -266,27 +266,26 @@ export function SubcontractorsProvider({ children }: { children: React.ReactNode
   }, [])
 
   const addJobAssignment = useCallback(async (assignment: Omit<SubcontractorJobAssignment, 'id'>) => {
-    try {
-      await apiAddJobSubcontractor(assignment.jobId, assignment.subcontractorId)
-      setJobAssignments((prev) => [
-        ...prev,
-        { ...assignment, id: `sja-${Date.now()}` },
-      ])
-    } catch (e) {
-      console.error('Failed to assign job', e)
-    }
+    await apiAddJobSubcontractor(assignment.jobId, assignment.subcontractorId)
+    setJobAssignments((prev) => {
+      if (prev.some((a) => a.jobId === assignment.jobId && a.subcontractorId === assignment.subcontractorId)) {
+        return prev
+      }
+      return [...prev, { ...assignment, id: `sja-${Date.now()}` }]
+    })
   }, [])
 
-  const removeJobAssignment = useCallback(async (id: string) => {
-    const assignment = jobAssignments.find(a => a.id === id)
-    if (assignment) {
-      try {
-        await apiRemoveJobSubcontractor(assignment.jobId, assignment.subcontractorId)
-      } catch (e) {
-        console.error('Failed to remove job assignment', e)
-      }
+  const removeJobAssignment = useCallback(async (id: string, fallback?: { jobId: string; subcontractorId: string }) => {
+    const assignment = jobAssignments.find((a) => a.id === id)
+    const jobId = assignment?.jobId ?? fallback?.jobId
+    const subcontractorId = assignment?.subcontractorId ?? fallback?.subcontractorId
+    if (!jobId || !subcontractorId) {
+      throw new Error('Job assignment not found')
     }
-    setJobAssignments((prev) => prev.filter((a) => a.id !== id))
+    await apiRemoveJobSubcontractor(jobId, subcontractorId)
+    setJobAssignments((prev) =>
+      prev.filter((a) => a.id !== id && !(a.jobId === jobId && a.subcontractorId === subcontractorId))
+    )
   }, [jobAssignments])
 
   const addPersonnel = useCallback((p: Omit<SubcontractorPersonnel, 'id'>): SubcontractorPersonnel => {
@@ -455,8 +454,8 @@ export function useSubcontractors() {
       addCertification: () => ({ id: '', subcontractorId: '', name: '', issuedAt: '', expiresAt: '', status: 'current' as const }),
       updateCertification: () => { },
       removeCertification: () => { },
-      addJobAssignment: () => { },
-      removeJobAssignment: () => { },
+      addJobAssignment: async () => { },
+      removeJobAssignment: async () => { },
       personnel: [],
       personnelCertifications: [],
       personnelJobAssignments: [],

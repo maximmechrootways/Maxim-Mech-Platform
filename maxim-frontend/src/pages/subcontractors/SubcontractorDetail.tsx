@@ -172,6 +172,7 @@ export function SubcontractorDetail() {
 
   const [isEditing, setIsEditing] = useState(false)
   const [savingDetails, setSavingDetails] = useState(false)
+  const [jobAssignLoading, setJobAssignLoading] = useState(false)
   const [detailsError, setDetailsError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deletingProfile, setDeletingProfile] = useState(false)
@@ -623,6 +624,43 @@ export function SubcontractorDetail() {
     if (!id) return
     await removeSubcontractorCertification(id, certId)
     await refetchDetail()
+  }
+
+  const handleAssignJob = async (jobId: string) => {
+    if (!sub || !jobId || jobAssignLoading) return
+    setDetailsError(null)
+    setJobAssignLoading(true)
+    try {
+      await addJobAssignment({
+        jobId,
+        subcontractorId: sub.id,
+        assignedBy: user?.name ?? 'Unknown',
+        assignedAt: new Date().toISOString().slice(0, 10),
+      })
+      await refetchDetail()
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Could not assign this job.'
+      setDetailsError(msg)
+    } finally {
+      setJobAssignLoading(false)
+    }
+  }
+
+  const handleRemoveJobAssignment = async (jobId: string) => {
+    if (!sub || jobAssignLoading) return
+    const assignment = jobAssignmentsForSub.find((a) => a.jobId === jobId)
+    if (!assignment) return
+    setDetailsError(null)
+    setJobAssignLoading(true)
+    try {
+      await removeJobAssignment(assignment.id, { jobId, subcontractorId: sub.id })
+      await refetchDetail()
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Could not remove this job assignment.'
+      setDetailsError(msg)
+    } finally {
+      setJobAssignLoading(false)
+    }
   }
 
   const assignedJobIds = jobAssignmentsForSub.map((a) => a.jobId)
@@ -1629,7 +1667,8 @@ export function SubcontractorDetail() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => removeJobAssignment(jobAssignmentsForSub.find((a) => a.jobId === j.id)!.id)}
+                    disabled={jobAssignLoading}
+                    onClick={() => handleRemoveJobAssignment(j.id)}
                   >
                     Remove
                   </Button>
@@ -1638,33 +1677,40 @@ export function SubcontractorDetail() {
             ))}
           </ul>
         )}
-        {isEditing && availableJobs.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-600 flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Assign to Job</span>
-              <select
-                id="assign-job-select"
-                className="min-h-[44px] px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white min-w-[220px]"
-                onChange={(e) => {
-                  const jobId = e.target.value
-                  if (!jobId) return
-                  addJobAssignment({
-                    jobId,
-                    subcontractorId: sub.id,
-                    assignedBy: user?.name ?? 'Unknown',
-                    assignedAt: new Date().toISOString().slice(0, 10),
-                  })
-                  e.target.value = ''
-                }}
-              >
-                <option value="">Select a job…</option>
-                {availableJobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.title} — {j.siteName}
-                  </option>
-                ))}
-              </select>
-            </label>
+        {isEditing && (
+          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-600">
+            {availableJobs.length > 0 ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Assign to Job</span>
+                  <select
+                    id="assign-job-select"
+                    disabled={jobAssignLoading}
+                    className="min-h-[44px] px-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white min-w-[220px] disabled:opacity-60"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const jobId = e.target.value
+                      if (!jobId) return
+                      void handleAssignJob(jobId)
+                      e.target.value = ''
+                    }}
+                  >
+                    <option value="">{jobAssignLoading ? 'Assigning…' : 'Select a job…'}</option>
+                    {availableJobs.map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {j.title} — {j.siteName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                {jobsList.length === 0
+                  ? 'No jobs available to assign yet.'
+                  : 'This subcontractor is already assigned to every available job.'}
+              </p>
+            )}
           </div>
         )}
       </Card>
