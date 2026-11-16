@@ -306,7 +306,7 @@ export async function listAllUsersForAdmin(userRole: string) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** Owner/HR: update employee (email, firstName, lastName, phone, jobTitle, department, role, employmentStatus, onLeaveStartedAt, terminatedAt, isActive) */
-export async function updateUserForAdmin(adminRole: string, targetUserId: string, data: {
+export async function updateUserForAdmin(adminRole: string, adminUserId: string, targetUserId: string, data: {
     email?: string
     firstName?: string
     lastName?: string
@@ -337,10 +337,9 @@ export async function updateUserForAdmin(adminRole: string, targetUserId: string
         select: { id: true, role: true, email: true },
     })
     if (!existing) throw { status: 404, message: 'User not found' }
-    if (existing.role === 'owner') {
-        if (data.employmentStatus === 'terminated' || data.isActive === false) {
-            throw { status: 400, message: 'The account owner cannot be deactivated' }
-        }
+    const isDeactivating = data.employmentStatus === 'terminated' || data.isActive === false
+    if (isDeactivating && adminUserId === targetUserId) {
+        throw { status: 400, message: 'You cannot deactivate your own account' }
     }
     const updateData: Record<string, unknown> = {}
     let nextEmail: string | null = null
@@ -414,9 +413,6 @@ export async function updateUserForAdmin(adminRole: string, targetUserId: string
     if (data.onLeaveStartedAt !== undefined) updateData.onLeaveStartedAt = data.onLeaveStartedAt ? new Date(data.onLeaveStartedAt) : null
     if (data.terminatedAt !== undefined) updateData.terminatedAt = data.terminatedAt ? new Date(data.terminatedAt) : null
     if (data.isActive !== undefined) {
-        if (existing.role === 'owner' && data.isActive === false) {
-            throw { status: 400, message: 'The account owner cannot be deactivated' }
-        }
         updateData.isActive = data.isActive
     }
     let updated: any

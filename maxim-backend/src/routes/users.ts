@@ -229,7 +229,7 @@ router.patch('/:id', requireRole('hr', 'owner'), async (req, res, next) => {
             terminatedAt?: string | null
             isActive?: boolean
         }
-        const user = await updateUserForAdmin(req.user!.role, targetId, {
+        const user = await updateUserForAdmin(req.user!.role, req.user!.id, targetId, {
             email: body.email,
             firstName: body.firstName,
             lastName: body.lastName,

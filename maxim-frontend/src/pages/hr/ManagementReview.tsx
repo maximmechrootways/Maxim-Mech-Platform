@@ -5,7 +5,7 @@ import { useEmployees } from '@/contexts/EmployeesContext'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { fetchLibraryDocuments, uploadLibraryDocument, updateLibraryDocument } from '@/api/library'
+import { fetchLibraryDocuments, uploadLibraryDocument, updateLibraryDocument, deleteLibraryDocument } from '@/api/library'
 import { fetchCertificates } from '@/api/certificates'
 import { listDailyHazardSubmissions } from '@/api/dailyHazardAnalysis'
 import { fetchQualityFindingsSummary } from '@/api/qualityFindings'
@@ -44,7 +44,8 @@ export function ManagementReview() {
   const [docName, setDocName] = useState('')
   const [bulkStatus, setBulkStatus] = useState<Array<{ name: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string }>>([])
   const [updatingCategoryId, setUpdatingCategoryId] = useState<string | null>(null)
-  const [categoryError, setCategoryError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   // KPI data
   const [kpiData, setKpiData] = useState({
@@ -158,7 +159,7 @@ export function ManagementReview() {
   const handleCategoryChange = async (docId: string, categoryKey: string) => {
     const previous = documents.find((d) => d.id === docId)
     if (!previous || previous.category === categoryKey) return
-    setCategoryError(null)
+    setActionError(null)
     setUpdatingCategoryId(docId)
     setDocuments((prev) =>
       prev.map((d) =>
@@ -177,9 +178,29 @@ export function ManagementReview() {
             : d
         )
       )
-      setCategoryError(err?.response?.data?.error ?? 'Failed to update category')
+      setActionError(err?.response?.data?.error ?? 'Failed to update category')
     } finally {
       setUpdatingCategoryId(null)
+    }
+  }
+
+  const handleDeleteDoc = async (doc: ReviewDoc) => {
+    if (
+      !window.confirm(
+        `Delete "${doc.name}"? This cannot be undone.`
+      )
+    ) {
+      return
+    }
+    setActionError(null)
+    setDeletingId(doc.id)
+    try {
+      await deleteLibraryDocument(doc.id)
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id))
+    } catch (err: any) {
+      setActionError(err?.response?.data?.error ?? 'Failed to delete document')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -488,9 +509,9 @@ export function ManagementReview() {
             </Button>
           )}
         </div>
-        {categoryError && (
-          <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 text-sm text-red-600 dark:text-red-400">
-            {categoryError}
+        {actionError && (
+          <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 text-sm text-red-600 dark:text-red-400" role="alert">
+            {actionError}
           </div>
         )}
         <div className="mt-4 overflow-x-auto">
@@ -554,12 +575,22 @@ export function ManagementReview() {
                         )}
                       </td>
                       <td className="py-3 pr-4 text-right">
-                        <Link
-                          to={`/documents/${doc.id}`}
-                          className="text-brand-600 dark:text-brand-400 hover:underline text-sm font-medium"
-                        >
-                          View
-                        </Link>
+                        <div className="inline-flex items-center gap-3">
+                          <Link
+                            to={`/documents/${doc.id}`}
+                            className="text-brand-600 dark:text-brand-400 hover:underline text-sm font-medium"
+                          >
+                            View
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteDoc(doc)}
+                            disabled={deletingId === doc.id}
+                            className="text-red-600 dark:text-red-400 hover:underline text-sm font-medium disabled:opacity-50"
+                          >
+                            {deletingId === doc.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )

@@ -630,6 +630,7 @@ export function EmployeeDetail() {
   const fullName = `${employee.firstName} ${employee.lastName}`
   const shownJobTitle = displayJobTitle(employee)
   const employeeIsOwner = (employee.role ?? '').toLowerCase() === 'owner'
+  const isSelf = Boolean(employee.id && user?.id && employee.id === user.id)
 
   const startEditing = () => {
     const roleLower = (employee.role ?? '').toLowerCase()
@@ -680,6 +681,11 @@ export function EmployeeDetail() {
       const nextEmail = form.email.trim()
       if (!nextEmail) {
         alert('Email is required.')
+        setSaving(false)
+        return
+      }
+      if (isSelf && form.status === 'terminated') {
+        alert('You cannot deactivate your own account.')
         setSaving(false)
         return
       }
@@ -878,7 +884,7 @@ export function EmployeeDetail() {
               {regeneratingInvite ? 'Regenerating…' : 'Regenerate Invite Code'}
             </Button>
           )}
-          {!editing && employee.status !== 'terminated' && !employeeIsOwner && (
+          {!editing && employee.status !== 'terminated' && !isSelf && (
             <Button variant="outline" className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" onClick={() => setShowDeactivateConfirm(true)}>
               Deactivate
             </Button>
@@ -1179,8 +1185,11 @@ export function EmployeeDetail() {
               >
                 <option value="active">Active</option>
                 <option value="on-leave">On leave</option>
-                <option value="terminated">Terminated</option>
+                {!isSelf && <option value="terminated">Terminated</option>}
               </select>
+              {isSelf && (
+                <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">You cannot deactivate your own account.</p>
+              )}
             </div>
             {form.status === 'on-leave' && (
               <div>
