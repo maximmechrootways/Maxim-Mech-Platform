@@ -3,6 +3,8 @@ import { useAuth, sessionRemainingTtl } from '@/contexts/AuthContext'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { api } from '@/api'
+import { downloadRecoveryCodes } from '@/utils/recoveryCodes'
 
 function formatTTL(seconds: number): string {
     const m = Math.floor(seconds / 60)
@@ -26,6 +28,10 @@ const ROLE_COLORS: Record<string, string> = {
 export function SessionPanel({ onClose }: { onClose: () => void }) {
     const { session, refreshToken, endSession } = useAuth()
     const [, setTick] = useState(0)
+    const [regenBusy, setRegenBusy] = useState(false)
+    const [regenError, setRegenError] = useState<string | null>(null)
+    const [newRecoveryCodes, setNewRecoveryCodes] = useState<string[] | null>(null)
+    const [showRegenConfirm, setShowRegenConfirm] = useState(false)
 
     /* re-render every second for live display */
     useEffect(() => {
@@ -38,6 +44,21 @@ export function SessionPanel({ onClose }: { onClose: () => void }) {
     const ttl = sessionRemainingTtl(session)
     const ttlPct = Math.max(0, (ttl / (30 * 60)) * 100)
     const jwtParts = (session.jwt || '').split('.')
+
+    const handleRegenerateRecoveryCodes = async () => {
+        setRegenBusy(true)
+        setRegenError(null)
+        try {
+            const res = await api.post('/auth/2fa/recovery-codes/regenerate')
+            const codes = Array.isArray(res.data?.recoveryCodes) ? res.data.recoveryCodes : []
+            setNewRecoveryCodes(codes)
+            setShowRegenConfirm(false)
+        } catch (err: any) {
+            setRegenError(err.response?.data?.error || err.response?.data?.message || 'Failed to regenerate codes')
+        } finally {
+            setRegenBusy(false)
+        }
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
@@ -55,6 +76,69 @@ export function SessionPanel({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <div className="p-5 space-y-5">
+                    {/* ── Security / 2FA ── */}
+                    <Card padding="md">
+                        <p className="text-xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 font-medium mb-2">Security</p>
+                        <div className="flex items-center gap-2 mb-3">
+                            <Badge variant={session.totpEnabled ? 'success' : session.twoFactorRequired ? 'warning' : 'default'}>
+                                {session.totpEnabled ? '2FA enabled' : session.twoFactorRequired ? '2FA required' : '2FA off'}
+                            </Badge>
+                        </div>
+                        {session.totpEnabled && (
+                            <div className="space-y-3">
+                                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                                    Regenerating recovery codes invalidates your previous set. Download or copy the new codes — they are not emailed.
+                                </p>
+                                {newRecoveryCodes && (
+                                    <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900/40 p-3 font-mono text-xs grid grid-cols-2 gap-1.5">
+                                        {newRecoveryCodes.map((c) => (
+                                            <span key={c}>{c}</span>
+                                        ))}
+                                    </div>
+                                )}
+                                {regenError && (
+                                    <p className="text-xs text-red-600 dark:text-red-400">{regenError}</p>
+                                )}
+                                {newRecoveryCodes ? (
+                                    <div className="flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            fullWidth
+                                            onClick={() => navigator.clipboard.writeText(newRecoveryCodes.join('\n'))}
+                                        >
+                                            Copy
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            fullWidth
+                                            onClick={() => downloadRecoveryCodes(newRecoveryCodes, session.userEmail)}
+                                        >
+                                            Download
+                                        </Button>
+                                    </div>
+                                ) : showRegenConfirm ? (
+                                    <div className="space-y-2">
+                                        <p className="text-xs text-amber-700 dark:text-amber-300">Replace all existing recovery codes?</p>
+                                        <div className="flex gap-2">
+                                            <Button size="sm" onClick={handleRegenerateRecoveryCodes} disabled={regenBusy} fullWidth>
+                                                {regenBusy ? 'Generating…' : 'Yes, regenerate'}
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={() => setShowRegenConfirm(false)} fullWidth>
+                                                Cancel
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Button size="sm" variant="outline" fullWidth onClick={() => setShowRegenConfirm(true)}>
+                                        Regenerate recovery codes
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </Card>
+
                     {/* ── Role ── */}
                     <Card padding="md">
                         <p className="text-xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 font-medium mb-2">Role</p>

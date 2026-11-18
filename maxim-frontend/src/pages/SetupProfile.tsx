@@ -5,6 +5,7 @@ import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { api } from '@/api'
+import { PENDING_2FA_PURPOSE_KEY, PENDING_2FA_TOKEN_KEY } from '@/utils/recoveryCodes'
 
 export function SetupProfile() {
     const { session } = useAuth()
@@ -26,10 +27,19 @@ export function SetupProfile() {
         setSaving(true)
 
         try {
-            await api.post('/auth/setup-profile', {
+            const res = await api.post('/auth/setup-profile', {
                 password,
                 displayName: displayName.trim() || undefined,
             })
+            const data = res.data || {}
+            if (data.requiresTwoFactorSetup) {
+                if (data.pendingToken) {
+                    sessionStorage.setItem(PENDING_2FA_TOKEN_KEY, data.pendingToken)
+                    sessionStorage.setItem(PENDING_2FA_PURPOSE_KEY, '2fa_setup')
+                }
+                navigate('/setup-2fa')
+                return
+            }
             navigate('/')
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to set up profile')

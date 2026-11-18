@@ -1,10 +1,16 @@
 import { prisma } from '../lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { hashPassword, comparePassword } from '../utils/password'
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt'
+import { generateAccessToken, generateRefreshToken, generateTwoFactorPendingToken } from '../utils/jwt'
 import { z } from 'zod'
 import { loginSchema } from '../schemas/authSchemas'
 import { validateInviteCode, redeemInviteCode } from './inviteService'
+import { isTwoFactorEnforcementEnabled } from '../config/twoFactor'
+import {
+    findValidTrustedDevice,
+    issueFullSession,
+    publicUserPayload,
+} from './twoFactorService'
 
 /**
  * Narrow selects for auth so login/refresh work before optional DB migrations add new User columns.
@@ -19,6 +25,7 @@ const loginUserSelect = {
     role: true,
     hasCompletedSetup: true,
     uiPreferences: true,
+    totpEnabled: true,
 } satisfies Prisma.UserSelect
 
 const inviteLoginUserSelect = {
@@ -34,12 +41,73 @@ const refreshUserSelect = {
     role: true,
     hasCompletedSetup: true,
     uiPreferences: true,
+    totpEnabled: true,
 } satisfies Prisma.UserSelect
+
+type LoginUser = Prisma.UserGetPayload<{ select: typeof loginUserSelect }>
+
+async function finishPasswordVerifiedLogin(
+    user: LoginUser,
+    trustedDeviceCookie?: string | null,
+) {
+    await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() },
+    })
+
+    const enforcement = isTwoFactorEnforcementEnabled()
+
+    if (!enforcement) {
+        return issueFullSession(user)
+    }
+
+    if (!user.totpEnabled) {
+        // Invite / incomplete profile still needs a session for setup-profile first.
+        if (!user.hasCompletedSetup) {
+            return issueFullSession(user)
+        }
+        const pendingToken = generateTwoFactorPendingToken({
+            id: user.id,
+            email: user.email,
+            purpose: '2fa_setup',
+        })
+        return {
+            requiresTwoFactorSetup: true as const,
+            pendingToken,
+            user: publicUserPayload(user),
+        }
+    }
+
+    const trusted = await findValidTrustedDevice(user.id, trustedDeviceCookie)
+    if (trusted) {
+        return issueFullSession(user)
+    }
+
+    const pendingToken = generateTwoFactorPendingToken({
+        id: user.id,
+        email: user.email,
+        purpose: '2fa_pending',
+    })
+    return {
+        requiresTwoFactor: true as const,
+        pendingToken,
+        user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+        },
+    }
+}
 
 /**
  * Login with email + password (normal login).
  */
-export const loginUser = async (data: z.infer<typeof loginSchema>, ipAddress: string) => {
+export const loginUser = async (
+    data: z.infer<typeof loginSchema>,
+    ipAddress: string,
+    trustedDeviceCookie?: string | null,
+) => {
     const user = await prisma.user.findUnique({
         where: { email: data.email },
         select: loginUserSelect,
@@ -55,50 +123,24 @@ export const loginUser = async (data: z.infer<typeof loginSchema>, ipAddress: st
             email: data.email,
             ipAddress,
             success,
-            userId: success && user ? user.id : null
-        }
+            userId: success && user ? user.id : null,
+        },
     })
 
     if (!success || !user) {
         throw { status: 401, message: 'Invalid credentials' }
     }
 
-    await prisma.user.update({
-        where: { id: user.id },
-        data: { lastLogin: new Date() }
-    })
-
-    const accessToken = generateAccessToken({
-        id: user.id,
-        email: user.email,
-        role: user.role
-    })
-
-    const refreshToken = await generateRefreshToken(user.id)
-
-    return {
-        accessToken,
-        refreshToken,
-        user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-            hasCompletedSetup: user.hasCompletedSetup,
-            uiPreferences: user.uiPreferences ?? {},
-        }
-    }
+    return finishPasswordVerifiedLogin(user, trustedDeviceCookie)
 }
 
 /**
  * Login with email + one-time invite code (first-time login).
+ * Issues a session so the user can complete password setup, then 2FA.
  */
 export const loginWithInviteCode = async (email: string, code: string, ipAddress: string) => {
-    // Validate the invite code is tied to this email
     const invite = await validateInviteCode(code, email)
 
-    // Find the user by email
     const user = await prisma.user.findUnique({
         where: { email: email.toLowerCase() },
         select: inviteLoginUserSelect,
@@ -110,53 +152,42 @@ export const loginWithInviteCode = async (email: string, code: string, ipAddress
         throw { status: 401, message: 'Account is deactivated. Contact HR.' }
     }
 
-    // Redeem the code (one-time use)
     await redeemInviteCode(code, user.id)
 
-    // Log the attempt
     await prisma.loginAttempt.create({
-        data: { email, ipAddress, success: true, userId: user.id }
+        data: { email, ipAddress, success: true, userId: user.id },
     })
 
-    // Update last login
     await prisma.user.update({
         where: { id: user.id },
-        data: { lastLogin: new Date() }
+        data: { lastLogin: new Date() },
     })
 
-    const accessToken = generateAccessToken({
-        id: user.id,
-        email: user.email,
-        role: user.role
-    })
-
-    const refreshToken = await generateRefreshToken(user.id)
-
-    return {
-        accessToken,
-        refreshToken,
-        user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-            hasCompletedSetup: user.hasCompletedSetup,
-            uiPreferences: user.uiPreferences ?? {},
-        }
-    }
+    return issueFullSession(user)
 }
 
 /**
  * Setup profile: set password on first login.
  */
 export const setupProfile = async (userId: string, password: string, displayName?: string) => {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            hasCompletedSetup: true,
+            uiPreferences: true,
+            totpEnabled: true,
+        },
+    })
     if (!user) throw { status: 404, message: 'User not found' }
 
     const hashedPassword = await hashPassword(password)
 
-    const updates: any = {
+    const updates: Prisma.UserUpdateInput = {
         passwordHash: hashedPassword,
         hasCompletedSetup: true,
     }
@@ -166,9 +197,41 @@ export const setupProfile = async (userId: string, password: string, displayName
         if (parts.length > 1) updates.lastName = parts.slice(1).join(' ')
     }
 
-    await prisma.user.update({ where: { id: userId }, data: updates })
+    const updated = await prisma.user.update({
+        where: { id: userId },
+        data: updates,
+        select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            hasCompletedSetup: true,
+            uiPreferences: true,
+            totpEnabled: true,
+        },
+    })
 
-    return { success: true }
+    const enforcement = isTwoFactorEnforcementEnabled()
+    if (enforcement && !updated.totpEnabled) {
+        const pendingToken = generateTwoFactorPendingToken({
+            id: updated.id,
+            email: updated.email,
+            purpose: '2fa_setup',
+        })
+        return {
+            success: true,
+            requiresTwoFactorSetup: true as const,
+            pendingToken,
+            user: publicUserPayload(updated),
+        }
+    }
+
+    return {
+        success: true,
+        requiresTwoFactorSetup: false as const,
+        user: publicUserPayload(updated),
+    }
 }
 
 export const refreshUserToken = async (refreshToken: string) => {
@@ -183,35 +246,29 @@ export const refreshUserToken = async (refreshToken: string) => {
 
     await prisma.refreshToken.update({
         where: { id: rfDB.id },
-        data: { revoked: true }
+        data: { revoked: true },
     })
 
     const accessToken = generateAccessToken({
         id: rfDB.user.id,
         email: rfDB.user.email,
-        role: rfDB.user.role
+        role: rfDB.user.role,
     })
 
     const newRefreshToken = await generateRefreshToken(rfDB.user.id)
 
-    const user = {
-        id: rfDB.user.id,
-        email: rfDB.user.email,
-        firstName: rfDB.user.firstName,
-        lastName: rfDB.user.lastName,
-        role: rfDB.user.role,
-        hasCompletedSetup: rfDB.user.hasCompletedSetup ?? true,
-        uiPreferences: rfDB.user.uiPreferences ?? {},
+    return {
+        accessToken,
+        refreshToken: newRefreshToken,
+        user: publicUserPayload(rfDB.user),
     }
-
-    return { accessToken, refreshToken: newRefreshToken, user }
 }
 
 export const logoutUser = async (refreshToken: string) => {
     try {
         await prisma.refreshToken.update({
             where: { token: refreshToken },
-            data: { revoked: true }
+            data: { revoked: true },
         })
     } catch (e) {
         // Return success even if not found (idempotent)
@@ -229,11 +286,16 @@ export const getMe = async (userId: string) => {
             role: true,
             hasCompletedSetup: true,
             uiPreferences: true,
+            totpEnabled: true,
             createdAt: true,
-            lastLogin: true
-        }
+            lastLogin: true,
+        },
     })
 
     if (!user) throw { status: 404, message: 'User not found' }
-    return user
+    return {
+        ...user,
+        uiPreferences: user.uiPreferences ?? {},
+        twoFactorRequired: isTwoFactorEnforcementEnabled() && !user.totpEnabled,
+    }
 }

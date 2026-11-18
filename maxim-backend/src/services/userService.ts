@@ -71,6 +71,7 @@ export async function listAllUsersForAdmin(userRole: string) {
                 hireDate: true,
                 createdAt: true,
                 lastLogin: true,
+                totpEnabled: true,
                 // Needed by the frontend employee detail page to render current job assignments
                 jobAssignments: {
                     select: {
@@ -298,6 +299,7 @@ export async function listAllUsersForAdmin(userRole: string) {
         hireDate: u.hireDate?.toISOString?.() ?? null,
         createdAt: u.createdAt?.toISOString?.() ?? null,
         lastLogin: u.lastLogin?.toISOString?.() ?? null,
+        totpEnabled: !!(u as { totpEnabled?: boolean }).totpEnabled,
         jobAssignments: u.jobAssignments,
         jobSupervisorLinks: u.jobSupervisorLinks,
     }))

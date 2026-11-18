@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma'
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev'
 const ACCESS_TOKEN_EXPIRES_IN = '15m'
 const REFRESH_TOKEN_DAYS = 7
+const TWO_FACTOR_PENDING_EXPIRES_IN = '10m'
 
 export interface TokenPayload {
     id: string
@@ -12,12 +13,45 @@ export interface TokenPayload {
     role: string
 }
 
+export type TwoFactorPendingPurpose = '2fa_pending' | '2fa_setup'
+
+export interface TwoFactorPendingPayload {
+    id: string
+    email: string
+    purpose: TwoFactorPendingPurpose
+}
+
 export const generateAccessToken = (payload: TokenPayload): string => {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES_IN })
 }
 
 export const verifyAccessToken = (token: string): TokenPayload => {
-    return jwt.verify(token, JWT_SECRET) as TokenPayload
+    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload & { purpose?: string }
+    if (decoded.purpose === '2fa_pending' || decoded.purpose === '2fa_setup') {
+        throw new Error('Pending two-factor token cannot be used as access token')
+    }
+    return decoded
+}
+
+export const generateTwoFactorPendingToken = (
+    payload: Omit<TwoFactorPendingPayload, 'purpose'> & { purpose: TwoFactorPendingPurpose },
+): string => {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: TWO_FACTOR_PENDING_EXPIRES_IN })
+}
+
+export const verifyTwoFactorPendingToken = (
+    token: string,
+    expectedPurposes?: TwoFactorPendingPurpose[],
+): TwoFactorPendingPayload => {
+    const decoded = jwt.verify(token, JWT_SECRET) as TwoFactorPendingPayload
+    if (decoded.purpose !== '2fa_pending' && decoded.purpose !== '2fa_setup') {
+        throw new Error('Invalid two-factor pending token')
+    }
+    if (expectedPurposes && !expectedPurposes.includes(decoded.purpose)) {
+        throw new Error('Invalid two-factor pending token purpose')
+    }
+    if (!decoded.id || !decoded.email) throw new Error('Invalid two-factor pending token')
+    return decoded
 }
 
 /** Short-lived state token for OAuth callbacks (e.g. Google Calendar connect). */

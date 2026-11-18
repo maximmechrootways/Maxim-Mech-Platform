@@ -71,6 +71,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
             })(),
             status,
             role: u.role,
+            totpEnabled: !!u.totpEnabled,
             onLeaveStartedAt: u.onLeaveStartedAt ? new Date(u.onLeaveStartedAt).toISOString().slice(0, 10) : undefined,
             terminatedAt: u.terminatedAt ? new Date(u.terminatedAt).toISOString().slice(0, 10) : undefined,
             jobAssignments: u.jobAssignments?.map((a: any) => ({

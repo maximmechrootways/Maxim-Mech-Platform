@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma'
 import { generateInviteCode } from '../services/inviteService'
 import * as auditLogService from '../services/auditLogService'
 import { anyNotificationEmailCategoryEnabled, mergeUiPreferences, normalizeUiPreferences } from '../services/uiPreferencesService'
+import { disableTwoFactorForUser } from '../services/twoFactorService'
 
 const router = Router()
 
@@ -198,6 +199,33 @@ router.patch('/:id/preferences', requireRole('hr', 'owner'), async (req, res, ne
             select: { uiPreferences: true },
         })
         res.status(200).json(updated.uiPreferences)
+    } catch (e) {
+        next(e)
+    }
+})
+
+/** Owner/HR: temporarily disable 2FA — clears secret, codes, trusted devices; next login forces re-setup */
+router.post('/:id/2fa/disable', requireRole('hr', 'owner'), async (req, res, next) => {
+    try {
+        const targetId = req.params.id
+        const result = await disableTwoFactorForUser(req.user!.role, targetId)
+        const actor = await prisma.user.findUnique({
+            where: { id: req.user!.id },
+            select: { firstName: true, lastName: true },
+        })
+        const userName = actor
+            ? `${actor.firstName || ''} ${actor.lastName || ''}`.trim() || (req.user as any).email
+            : (req.user as any).email
+        await auditLogService.writeAuditLog({
+            userId: req.user!.id,
+            userName,
+            action: 'update',
+            entityType: 'user',
+            entityId: targetId,
+            entityLabel: 'Disable 2FA',
+            linkTo: `/employees/${targetId}`,
+        }).catch(() => {})
+        res.status(200).json(result)
     } catch (e) {
         next(e)
     }

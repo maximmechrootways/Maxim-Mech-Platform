@@ -55,8 +55,9 @@ interface AuthContextValue {
     loading: boolean
     /** True once initial refresh finished and an access token is available (if logged in). */
     authReady: boolean
-    authenticate: (email: string, password: string) => Promise<{ success: true; hasCompletedSetup: boolean } | { success: false; message: string }>
+    authenticate: (email: string, password: string) => Promise<AuthenticateResult>
     setSessionFromLoginResponse: (data: { accessToken: string; refreshToken: string; user: any }) => void
+    completeTwoFactorSession: (data: { accessToken: string; refreshToken: string; user: any }) => void
     endSession: () => void
     refreshToken: () => void
     revokeSession: (sessionId: string) => void
@@ -72,12 +73,16 @@ function sessionFromUser(user: {
     lastName?: string | null
     role: string
     hasCompletedSetup?: boolean
+    totpEnabled?: boolean
+    twoFactorRequired?: boolean
     uiPreferences?: UiPreferences
 }): Session {
     const now = Math.floor(Date.now() / 1000)
     const exp = now + SESSION_TTL_SECONDS
     const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
     const role = (user.role || 'viewer') as AuthRole
+    const totpEnabled = Boolean(user.totpEnabled)
+    const twoFactorRequired = Boolean(user.twoFactorRequired)
     return {
         id: uid(),
         userId: user.id,
@@ -92,9 +97,17 @@ function sessionFromUser(user: {
         heartbeatStatus: 'connected',
         status: 'active',
         hasCompletedSetup: user.hasCompletedSetup ?? true,
+        totpEnabled,
+        twoFactorRequired,
         uiPreferences: normalizeUiPreferences(user.uiPreferences),
     }
 }
+
+export type AuthenticateResult =
+    | { success: true; hasCompletedSetup: boolean; twoFactorRequired: boolean }
+    | { success: false; message: string }
+    | { success: 'requiresTwoFactor'; pendingToken: string }
+    | { success: 'requiresTwoFactorSetup'; pendingToken: string }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [accessToken, setAccessTokenState] = useState<string | null>(null)
@@ -121,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fetch(apiPath('/auth/refresh'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ refreshToken: storedRefresh }),
         })
             .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -179,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, [heartbeatActive, session?.id])
 
     const authenticate = useCallback(
-        async (_email: string, _password: string): Promise<{ success: true; hasCompletedSetup: boolean } | { success: false; message: string }> => {
+        async (_email: string, _password: string): Promise<AuthenticateResult> => {
             setIsAuthenticating(true)
             setAuthSteps([
                 { label: 'Validating credentials…', status: 'running' },
@@ -187,8 +201,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ])
             try {
                 const res = await api.post('/auth/login', { email: _email, password: _password })
-                const { accessToken: at, refreshToken: rt, user } = res.data
-                if (!user) throw new Error('No user in response')
+                const data = res.data || {}
+
+                if (data.requiresTwoFactor && data.pendingToken) {
+                    setIsAuthenticating(false)
+                    setAuthSteps([])
+                    return { success: 'requiresTwoFactor', pendingToken: data.pendingToken }
+                }
+                if (data.requiresTwoFactorSetup && data.pendingToken) {
+                    setIsAuthenticating(false)
+                    setAuthSteps([])
+                    return { success: 'requiresTwoFactorSetup', pendingToken: data.pendingToken }
+                }
+
+                const { accessToken: at, refreshToken: rt, user } = data
+                if (!user || !at || !rt) throw new Error('No user in response')
                 setAuthToken(at)
                 setAccessTokenState(at)
                 localStorage.setItem('refreshToken', rt)
@@ -198,7 +225,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setAllSessions([newSession])
                 setHeartbeatActive(true)
                 setIsAuthenticating(false)
-                return { success: true, hasCompletedSetup: newSession.hasCompletedSetup }
+                return {
+                    success: true,
+                    hasCompletedSetup: newSession.hasCompletedSetup,
+                    twoFactorRequired: !!newSession.twoFactorRequired,
+                }
             } catch (err: unknown) {
                 setIsAuthenticating(false)
                 setAuthSteps([])
@@ -218,7 +249,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         }
                     }
                     const message =
-                        (err.response.data as { error?: string } | undefined)?.error ??
+                        (err.response.data as { error?: string; message?: string } | undefined)?.error ??
+                        (err.response.data as { message?: string } | undefined)?.message ??
                         (err.response.status === 429 ? 'Too many login attempts. Please try again later.' : 'Invalid email or password.')
                     return { success: false, message }
                 }
@@ -238,6 +270,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAllSessions([newSession])
         setHeartbeatActive(true)
     }, [])
+
+    const completeTwoFactorSession = useCallback((data: { accessToken: string; refreshToken: string; user: any }) => {
+        setSessionFromLoginResponse(data)
+        setIsAuthenticating(false)
+        setAuthSteps([])
+    }, [setSessionFromLoginResponse])
 
     const endSession = useCallback(async () => {
         const storedRefresh = localStorage.getItem('refreshToken')
@@ -316,6 +354,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 authReady,
                 authenticate,
                 setSessionFromLoginResponse,
+                completeTwoFactorSession,
                 endSession,
                 refreshToken,
                 revokeSession,

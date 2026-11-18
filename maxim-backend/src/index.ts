@@ -1,8 +1,10 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import dotenv from "dotenv";
 import { prisma } from "./lib/prisma";
+import { assertTotpKeyIfEnforced } from "./config/twoFactor";
 import {
   createCustomTemplate,
   updateTemplate,
@@ -99,6 +101,15 @@ import { startNicheBakeryReminderWorker } from "./services/nicheBakeryReminderSe
 
 dotenv.config();
 
+try {
+  assertTotpKeyIfEnforced();
+} catch (e: any) {
+  console.error(
+    `[2FA] ${e?.message || e}. Set TOTP_ENCRYPTION_KEY or disable TWO_FACTOR_ENFORCEMENT.`,
+  );
+  process.exit(1);
+}
+
 const app = express();
 
 app.set("trust proxy", 1);
@@ -181,6 +192,7 @@ app.use(
     limit: process.env.JSON_BODY_LIMIT || "20mb",
   }),
 );
+app.use(cookieParser());
 app.use(sanitizeInput);
 
 if (process.env.NODE_ENV === "production") {

@@ -147,7 +147,7 @@ export function EmployeeDetail() {
   const location = useLocation()
   const { id } = useParams()
   const { user } = useUser()
-  const { getEmployee, updateEmployee, deleteEmployee } = useEmployees()
+  const { getEmployee, updateEmployee, deleteEmployee, loadData } = useEmployees()
   const { certificates, removeCertificate, refetch: refetchCertificates } = useCertificates()
   const employee = id ? getEmployee(id) : undefined
   const isOwnerOrHr = user?.role === 'owner' || user?.role === 'hr'
@@ -161,6 +161,9 @@ export function EmployeeDetail() {
   const [latestInviteCode, setLatestInviteCode] = useState<{ code: string; expiresAt?: string } | null>(null)
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDisable2faConfirm, setShowDisable2faConfirm] = useState(false)
+  const [disabling2fa, setDisabling2fa] = useState(false)
+  const [twoFaFeedback, setTwoFaFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -744,6 +747,28 @@ export function EmployeeDetail() {
     }
   }
 
+  const handleDisable2fa = async () => {
+    if (!employee?.id || disabling2fa) return
+    setDisabling2fa(true)
+    setTwoFaFeedback(null)
+    try {
+      await api.post(`/users/${employee.id}/2fa/disable`)
+      setShowDisable2faConfirm(false)
+      setTwoFaFeedback({
+        type: 'success',
+        message: `Two-factor authentication disabled for ${employee.email || fullName}. They must set it up again on next login when enforcement is on.`,
+      })
+      await loadData()
+    } catch (err: unknown) {
+      setTwoFaFeedback({
+        type: 'error',
+        message: formatAxiosError(err),
+      })
+    } finally {
+      setDisabling2fa(false)
+    }
+  }
+
   const handleDeleteProfile = async () => {
     if (!employee.id) return
     setDeleting(true)
@@ -884,6 +909,15 @@ export function EmployeeDetail() {
               {regeneratingInvite ? 'Regenerating…' : 'Regenerate Invite Code'}
             </Button>
           )}
+          {!editing && employee.totpEnabled && (
+            <Button
+              variant="outline"
+              className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+              onClick={() => setShowDisable2faConfirm(true)}
+            >
+              Disable 2FA
+            </Button>
+          )}
           {!editing && employee.status !== 'terminated' && !isSelf && (
             <Button variant="outline" className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" onClick={() => setShowDeactivateConfirm(true)}>
               Deactivate
@@ -891,6 +925,22 @@ export function EmployeeDetail() {
           )}
         </div>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={employee.totpEnabled ? 'success' : 'default'}>
+          {employee.totpEnabled ? '2FA enabled' : '2FA not set up'}
+        </Badge>
+      </div>
+      {twoFaFeedback && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            twoFaFeedback.type === 'success'
+              ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/25 text-emerald-900 dark:text-emerald-100'
+              : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/25 text-red-900 dark:text-red-100'
+          }`}
+        >
+          <p>{twoFaFeedback.message}</p>
+        </div>
+      )}
       {inviteFeedback && (
         <div
           className={`rounded-xl border px-4 py-3 text-sm ${
@@ -1890,6 +1940,29 @@ export function EmployeeDetail() {
           </div>
         )}
       </Card>
+
+      {showDisable2faConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 dark:bg-black/60 animate-fade-in"
+          onClick={() => !disabling2fa && setShowDisable2faConfirm(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="disable-2fa-title"
+        >
+          <Card padding="lg" className="max-w-md w-full shadow-xl animate-fade-in" onClick={(e) => e.stopPropagation()}>
+            <h2 id="disable-2fa-title" className="font-display font-bold text-xl text-neutral-900 dark:text-white">Disable 2FA?</h2>
+            <p className="mt-2 text-neutral-600 dark:text-neutral-400">
+              This temporarily clears two-factor authentication for <strong>{fullName}</strong>. Their authenticator secret, recovery codes, and remembered devices will be removed. On next login they must set up 2FA again (when enforcement is enabled).
+            </p>
+            <div className="mt-6 flex gap-3 justify-end">
+              <Button type="button" variant="ghost" onClick={() => setShowDisable2faConfirm(false)} disabled={disabling2fa}>Cancel</Button>
+              <Button type="button" variant="danger" onClick={handleDisable2fa} disabled={disabling2fa}>
+                {disabling2fa ? 'Disabling…' : 'Disable 2FA'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {showDeactivateConfirm && (
         <div

@@ -23,6 +23,16 @@ export const registerLimiter = rateLimit({
     keyGenerator,
 })
 
+/** TOTP / recovery-code verification and setup confirm */
+export const twoFactorVerifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many two-factor attempts, please try again later' },
+    keyGenerator,
+})
+
 export const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 600, // Raised from 200 — SPA fires 10-15 parallel fetches per page load

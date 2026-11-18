@@ -92,6 +92,7 @@ import { SiteDetail } from '@/pages/safety/SiteDetail'
 import { ProjectDashboard } from '@/pages/safety/ProjectDashboard'
 import { InviteCodes } from '@/pages/hr/InviteCodes'
 import { SetupProfile } from '@/pages/SetupProfile'
+import { SetupTwoFactor } from '@/pages/SetupTwoFactor'
 import { ForgotPassword } from '@/pages/ForgotPassword'
 import { ResetPassword } from '@/pages/ResetPassword'
 import { QrFormRedirect } from '@/pages/forms/QrFormRedirect'
@@ -110,10 +111,11 @@ import { LocalArchiveProjectPage } from '@/pages/estimating/LocalArchiveProjectP
 import { CurrentProjectFolderFilesPage } from '@/pages/estimating/CurrentProjectFolderFilesPage'
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
-  const { loading } = useAuth()
+  const { loading, session } = useAuth()
   const { user } = useUser()
   if (loading) return <div className="flex min-h-screen items-center justify-center text-neutral-500">Loading…</div>
   if (!user) return <Navigate to="/login" replace />
+  if (session?.twoFactorRequired) return <Navigate to="/setup-2fa" replace />
   if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />
   return <>{children}</>
 }
@@ -154,6 +156,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/setup-profile" element={<SetupProfile />} />
+        <Route path="/setup-2fa" element={<SetupTwoFactor />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/qr/:slug" element={<QrFormRedirect />} />

@@ -50,10 +50,12 @@
         "multer": "^1.4.5-lts.1",
         "nanoid": "^3.3.11",
         "nodemailer": "^8.0.1",
+        "otplib": "^13.6.0",
         "pdf-lib": "^1.17.1",
         "pdf-parse": "1.1.1",
         "pgvector": "^0.2.0",
         "prisma": "^5.22.0",
+        "qrcode": "^1.5.4",
         "uuid": "^9.0.1",
         "zod": "^3.23.8"
     },
@@ -69,6 +71,7 @@
         "@types/node": "^20.x",
         "@types/nodemailer": "^7.0.11",
         "@types/pdf-parse": "^1.1.5",
+        "@types/qrcode": "^1.5.6",
         "@types/uuid": "^9.0.8",
         "ts-node-dev": "^2.0.0",
         "typescript": "^5.9.3"

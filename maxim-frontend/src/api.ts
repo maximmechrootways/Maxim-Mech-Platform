@@ -90,6 +90,7 @@ export function formatAxiosError(e: unknown): string {
 export const api = axios.create({
     baseURL: BASE_URL,
     timeout: 25_000,
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -147,7 +148,7 @@ api.interceptors.response.use(
                     const refreshRes = await axios.post(
                         apiPath('/auth/refresh'),
                         { refreshToken: storedRefresh },
-                        { headers: { 'Content-Type': 'application/json' } }
+                        { headers: { 'Content-Type': 'application/json' }, withCredentials: true }
                     )
                     const { accessToken, refreshToken } = refreshRes.data
                     setAuthToken(accessToken)

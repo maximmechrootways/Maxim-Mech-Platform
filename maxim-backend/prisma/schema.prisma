@@ -47,9 +47,16 @@ model User {
   emailNotificationsEnabled  Boolean   @default(true)
   uiPreferences              Json      @default("{}")
   composioUserId             String?
+  /// TOTP 2FA: enabled after user confirms authenticator setup
+  totpEnabled                Boolean   @default(false)
+  /// AES-GCM encrypted TOTP seed (pending while totpEnabled=false during setup)
+  totpSecretEncrypted        String?
+  totpEnabledAt              DateTime?
 
   refreshTokens                   RefreshToken[]
   loginAttempts                   LoginAttempt[]
+  twoFactorRecoveryCodes          TwoFactorRecoveryCode[]
+  trustedDevices                  TrustedDevice[]
   documents                       Document[]
   createdJobs                     Job[]            @relation("JobCreatedBy")
   jobSupervisorLinks              JobSupervisor[]
@@ -161,6 +168,31 @@ model LoginAttempt {
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([email, attemptedAt])
+}
+
+model TwoFactorRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model TrustedDevice {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String
+  expiresAt  DateTime
+  userAgent  String?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
 }
 
 model ProductFeedback {

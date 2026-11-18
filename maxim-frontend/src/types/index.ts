@@ -60,6 +60,8 @@ export interface Session {
   heartbeatStatus: 'connected' | 'degraded' | 'disconnected'
   status: 'active' | 'expired' | 'revoked'
   hasCompletedSetup: boolean
+  totpEnabled?: boolean
+  twoFactorRequired?: boolean
   uiPreferences?: UiPreferences
 }
 
@@ -548,6 +550,8 @@ export interface Employee {
   status: 'active' | 'on-leave' | 'terminated'
   /** Role from API (owner | hr | supervisor | labourer) for list filtering */
   role?: string
+  /** Whether TOTP 2FA is currently enabled for this account */
+  totpEnabled?: boolean
   /** When status is on-leave: date they went on leave (ISO date string) */
   onLeaveStartedAt?: string
   /** When status is terminated: date of termination (ISO date string) */

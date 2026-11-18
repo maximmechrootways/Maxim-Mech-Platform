@@ -78,3 +78,30 @@ export const refreshSchema = z.object({
         .min(1, 'Refresh token is required')
         .max(REFRESH_TOKEN_MAX, 'Invalid refresh token'),
 })
+
+export const twoFactorSetupConfirmSchema = z.object({
+    code: z
+        .string()
+        .min(1, 'Authenticator code is required')
+        .transform((s) => s.replace(/\s+/g, ''))
+        .refine((s) => /^\d{6}$/.test(s), 'Authenticator code must be 6 digits'),
+    pendingToken: z.string().min(1).max(2048).optional(),
+})
+
+export const twoFactorVerifySchema = z
+    .object({
+        pendingToken: z.string().min(1, 'Pending token is required').max(2048),
+        code: z
+            .string()
+            .transform((s) => s.replace(/\s+/g, ''))
+            .optional(),
+        recoveryCode: z.string().min(1).max(64).optional(),
+        rememberDevice: z.boolean().optional(),
+    })
+    .refine((d) => !!(d.code || d.recoveryCode), {
+        message: 'Authenticator code or recovery code is required',
+    })
+
+export const twoFactorSetupStartSchema = z.object({
+    pendingToken: z.string().min(1).max(2048).optional(),
+})
