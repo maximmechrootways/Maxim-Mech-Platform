@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useInjuryReports } from '@/contexts/InjuryReportsContext'
+import { useSubcontractors } from '@/contexts/SubcontractorsContext'
+import { fetchSites, type SiteOption } from '@/api/jobs'
 import { Card, CardHeader, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -49,9 +51,22 @@ function formatLabel(s: string): string {
   return INJURY_TYPE_LABELS[s as InjuryType] ?? BODY_PART_LABELS[s as BodyPart] ?? MECHANISM_LABELS[s as InjuryMechanism] ?? s.replace(/-/g, ' ')
 }
 
+function formatReportDate(iso: string): string {
+  return iso.slice(0, 10)
+}
+
 export function InjuryAnalytics() {
+  const navigate = useNavigate()
   const { reports } = useInjuryReports()
+  const { subcontractors } = useSubcontractors()
   const [dateRange, setDateRange] = useState<'all' | 'ytd' | '90'>('all')
+  const [sites, setSites] = useState<SiteOption[]>([])
+
+  useEffect(() => {
+    fetchSites(false)
+      .then(setSites)
+      .catch(() => setSites([]))
+  }, [])
 
   const filtered = useMemo(() => {
     if (dateRange === 'all') return reports
@@ -72,6 +87,29 @@ export function InjuryAnalytics() {
     })
     return Array.from(map.values()).sort((a, b) => b.reports.length - a.reports.length)
   }, [filtered])
+
+  const whoWasInjuredRows = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const nameA = (a.injuredPersonName || 'Unknown').toLowerCase()
+      const nameB = (b.injuredPersonName || 'Unknown').toLowerCase()
+      if (nameA !== nameB) return nameA.localeCompare(nameB)
+      return (b.reportedAt || '').localeCompare(a.reportedAt || '')
+    })
+  }, [filtered])
+
+  const companyNameFor = (r: InjuryReport): string => {
+    if (!r.subcontractorId) return 'Maxim'
+    return subcontractors.find((s) => s.id === r.subcontractorId)?.companyName ?? '—'
+  }
+
+  const locationFor = (r: InjuryReport): string => {
+    if (r.siteId) {
+      const byId = sites.find((s) => s.id === r.siteId)
+      if (byId?.address) return byId.address
+    }
+    const byName = sites.find((s) => s.name === r.siteName)
+    return byName?.address ?? '—'
+  }
 
   const byType = useMemo(() => {
     const map = new Map<string, number>()
@@ -146,11 +184,12 @@ export function InjuryAnalytics() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Injury Analytics</h1>
+          <h1 className="font-display font-bold text-display-xl text-neutral-900 dark:text-white tracking-tight">Analytics & Metrics</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1">Track types, who was injured, and key metrics</p>
         </div>
-        <div className="flex gap-2">
-          <Link to="/injury-reports"><Button variant="secondary">All Reports</Button></Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/injury-reports/list"><Button variant="secondary">All Reports</Button></Link>
+          <Button onClick={() => navigate('/injury-reports/new')}>New Report</Button>
           <div className="flex rounded-lg border border-neutral-200 dark:border-neutral-600 overflow-hidden">
             {(['all', 'ytd', '90'] as const).map((r) => (
               <button
@@ -227,28 +266,32 @@ export function InjuryAnalytics() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-200 dark:border-neutral-600 text-left text-neutral-500 dark:text-neutral-400">
-                <th className="py-2 pr-4 font-medium">Injured Person</th>
-                <th className="py-2 pr-4 font-medium">Count</th>
-                <th className="py-2 pr-4 font-medium">Type</th>
-                <th className="py-2 pr-4 font-medium">Body Part</th>
-                <th className="py-2 pr-4 font-medium">Site</th>
-                <th className="py-2 pr-4 font-medium">Date</th>
+                <th className="py-2 pr-4 font-medium">Injured person</th>
+                <th className="py-2 pr-4 font-medium">Company</th>
                 <th className="py-2 pr-4 font-medium">Severity</th>
-                <th className="py-2 pr-4 font-medium">Report</th>
+                <th className="py-2 pr-4 font-medium">Location</th>
+                <th className="py-2 pr-4 font-medium">Site</th>
+                <th className="py-2 pr-4 font-medium">Date Report</th>
               </tr>
             </thead>
             <tbody>
-              {byPerson.flatMap(({ name, reports: personReports }) =>
-                personReports.map((r, i) => (
+              {whoWasInjuredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-4 text-neutral-500 dark:text-neutral-400">No injury reports for this period</td>
+                </tr>
+              ) : (
+                whoWasInjuredRows.map((r) => (
                   <tr key={r.id} className="border-b border-neutral-100 dark:border-neutral-700/50">
-                    <td className="py-2 pr-4 font-medium text-neutral-900 dark:text-white">{i === 0 ? name : '—'}</td>
-                    <td className="py-2 pr-4 text-neutral-600 dark:text-neutral-300">{i === 0 ? personReports.length : '—'}</td>
-                    <td className="py-2 pr-4">{r.injuryType ? formatLabel(r.injuryType) : '—'}</td>
-                    <td className="py-2 pr-4">{r.bodyPart ? formatLabel(r.bodyPart) : '—'}</td>
-                    <td className="py-2 pr-4">{r.siteName}</td>
-                    <td className="py-2 pr-4">{r.dateOfInjury ?? r.reportedAt.slice(0, 10)}</td>
+                    <td className="py-2 pr-4 font-medium text-neutral-900 dark:text-white">
+                      <Link to={`/injury-reports/${r.id}`} className="text-brand-600 dark:text-brand-400 hover:underline">
+                        {r.injuredPersonName || 'Unknown'}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-4 text-neutral-700 dark:text-neutral-300">{companyNameFor(r)}</td>
                     <td className="py-2 pr-4"><Badge variant={r.severity === 'major' ? 'danger' : 'warning'}>{r.severity}</Badge></td>
-                    <td className="py-2 pr-4"><Link to={`/injury-reports/${r.id}`} className="text-brand-600 dark:text-brand-400 hover:underline">View</Link></td>
+                    <td className="py-2 pr-4 text-neutral-700 dark:text-neutral-300">{locationFor(r)}</td>
+                    <td className="py-2 pr-4 text-neutral-700 dark:text-neutral-300">{r.siteName}</td>
+                    <td className="py-2 pr-4 text-neutral-700 dark:text-neutral-300">{formatReportDate(r.reportedAt)}</td>
                   </tr>
                 ))
               )}

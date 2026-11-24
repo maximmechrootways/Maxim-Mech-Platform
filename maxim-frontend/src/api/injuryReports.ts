@@ -5,6 +5,7 @@ export interface InjuryReportPayload {
   siteId?: string
   siteName: string
   reportedBy?: string
+  reportedAt?: string
   status?: string
   severity?: string
   description: string

@@ -33,7 +33,7 @@ export function InjuryReports() {
           <p className="text-neutral-500 dark:text-neutral-400 mt-1">Track and manage workplace injury reports in depth</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/injury-reports/analytics"><Button variant="secondary">Analytics & Metrics</Button></Link>
+          <Link to="/injury-reports"><Button variant="secondary">Analytics & Metrics</Button></Link>
           <Button variant="secondary" onClick={() => {
             const rows = filtered.map((r) => ({
               id: r.id,

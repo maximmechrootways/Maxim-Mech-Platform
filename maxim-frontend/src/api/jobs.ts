@@ -20,6 +20,7 @@ export interface JobListItem {
 export interface SiteOption {
   id: string
   name: string
+  address?: string
   jobId: string | null
   activeJobTitle: string | null
 }

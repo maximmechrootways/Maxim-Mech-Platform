@@ -621,6 +621,7 @@ export type InjuryMechanism = 'struck-by' | 'struck-against' | 'caught-in' | 'fa
 export interface InjuryReport {
   id: string
   jobId?: string
+  siteId?: string
   siteName: string
   reportedBy: string
   reportedAt: string

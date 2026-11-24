@@ -8,6 +8,24 @@ function canAccess(userRole: string) {
     if (!ALLOWED_ROLES.includes(userRole)) throw { status: 403, message: 'Insufficient role for injury reports' }
 }
 
+/** Local YYYY-MM-DD for server timezone (past dates + today only). */
+function localDateString(d: Date = new Date()): string {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+}
+
+function assertDateOfInjuryAllowed(dateOfInjury: string | null | undefined) {
+    if (dateOfInjury == null || dateOfInjury === '') return
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfInjury)) {
+        throw { status: 400, message: 'Date of injury must be YYYY-MM-DD' }
+    }
+    if (dateOfInjury > localDateString()) {
+        throw { status: 400, message: 'Date of injury cannot be in the future' }
+    }
+}
+
 function mapInjuryReport(r: any) {
     return {
         id: r.id,
@@ -60,6 +78,7 @@ export async function getInjuryReportById(id: string, userRole: string) {
 
 export async function createInjuryReport(userId: string, userRole: string, userName: string, data: any) {
     canAccess(userRole)
+    assertDateOfInjuryAllowed(data.dateOfInjury)
     const report = await prisma.injuryReport.create({
         data: {
             jobId: data.jobId?.trim() || null,
@@ -67,6 +86,7 @@ export async function createInjuryReport(userId: string, userRole: string, userN
             siteName: sanitizeText(data.siteName),
             reportedById: userId,
             reportedBy: sanitizeText(data.reportedBy) || userName,
+            ...(data.reportedAt ? { reportedAt: new Date(data.reportedAt) } : {}),
             status: data.status || 'draft',
             severity: data.severity || 'minor',
             description: sanitizeText(data.description),
@@ -101,11 +121,13 @@ export async function updateInjuryReport(id: string, userRole: string, data: any
     canAccess(userRole)
     const existing = await prisma.injuryReport.findUnique({ where: { id } })
     if (!existing) throw { status: 404, message: 'Injury report not found' }
+    if (data.dateOfInjury !== undefined) assertDateOfInjuryAllowed(data.dateOfInjury)
     const report = await prisma.injuryReport.update({
         where: { id },
         data: {
             ...(data.siteName !== undefined && { siteName: data.siteName.trim() }),
             ...(data.reportedBy !== undefined && { reportedBy: data.reportedBy.trim() }),
+            ...(data.reportedAt !== undefined && { reportedAt: data.reportedAt ? new Date(data.reportedAt) : existing.reportedAt }),
             ...(data.status !== undefined && { status: data.status }),
             ...(data.severity !== undefined && { severity: data.severity }),
             ...(data.description !== undefined && { description: data.description.trim() }),

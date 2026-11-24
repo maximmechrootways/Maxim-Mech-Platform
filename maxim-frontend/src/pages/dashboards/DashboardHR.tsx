@@ -364,8 +364,8 @@ export function DashboardHR() {
           <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <Link to="/safety" className="text-brand-600 dark:text-brand-400 hover:underline">Health &amp; Safety</Link>
             <Link to="/safety/alerts" className="text-brand-600 dark:text-brand-400 hover:underline">Safety Alerts &amp; Acknowledgements</Link>
-            <Link to="/injury-reports/analytics" className="text-brand-600 dark:text-brand-400 hover:underline">Injury Analytics</Link>
-            <Link to="/injury-reports" className="text-brand-600 dark:text-brand-400 hover:underline">Injury Reports</Link>
+            <Link to="/injury-reports" className="text-brand-600 dark:text-brand-400 hover:underline">Injury Analytics</Link>
+            <Link to="/injury-reports/list" className="text-brand-600 dark:text-brand-400 hover:underline">Injury Reports</Link>
             <Link to="/library?view=submissions&from=safety" className="text-brand-600 dark:text-brand-400 hover:underline">Completed Forms</Link>
             <Link to="/subcontractors" className="text-brand-600 dark:text-brand-400 hover:underline">Subcontractors</Link>
             <Link to="/employees" className="text-brand-600 dark:text-brand-400 hover:underline">Employees</Link>
@@ -378,7 +378,7 @@ export function DashboardHR() {
           <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 px-4 py-3 flex items-center gap-3">
             <span className="text-amber-600 dark:text-amber-400 font-medium">Open injury reports:</span>
             <span className="text-sm text-amber-800 dark:text-amber-200">Review and close open reports.</span>
-            <Link to="/injury-reports" className="text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline ml-auto">View reports</Link>
+            <Link to="/injury-reports/list" className="text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline ml-auto">View reports</Link>
           </div>
         </section>
       )}
@@ -473,7 +473,7 @@ export function DashboardHR() {
       {/* Key metrics */}
       <section className="mb-8">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <StatCard label="Open Injuries" value={openInjuries.length} href="/injury-reports?filter=open" highlight={openInjuries.length > 0} />
+          <StatCard label="Open Injuries" value={openInjuries.length} href="/injury-reports/list" highlight={openInjuries.length > 0} />
           <StatCard label="Active Jobs" value={activeJobs ?? '—'} href="/jobs" />
           <StatCard label="Checked In Today" value={jobCounts == null ? '—' : `${checkedInToday}/${totalAssignedToday}`} sub="on site" href="/jobs" />
           <StatCard label="Forms Pending" value={formsPending ?? '—'} href="/daily-forms" />
@@ -541,7 +541,7 @@ export function DashboardHR() {
             <div>
               <div className="flex items-center justify-between gap-2">
                 <CardHeader className="text-base mb-0 pb-1">Open Injury Reports</CardHeader>
-                <Link to="/injury-reports" className="text-sm text-brand-600 dark:text-brand-400 hover:underline">View all</Link>
+                <Link to="/injury-reports/list" className="text-sm text-brand-600 dark:text-brand-400 hover:underline">View all</Link>
               </div>
               <ul className="mt-2 space-y-1">
                 {openInjuries.length === 0 ? (

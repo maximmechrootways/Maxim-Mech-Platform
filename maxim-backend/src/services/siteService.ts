@@ -34,6 +34,7 @@ export async function listSites(activeOnly: boolean = true) {
         return {
             id: s.id,
             name: s.name,
+            address: s.address ?? undefined,
             jobId: activeJob?.id ?? null,
             activeJobTitle: activeJob?.title ?? null,
             managerName,

@@ -217,9 +217,10 @@ export default function App() {
           <Route path="employees" element={<ProtectedRoute roles={['owner', 'hr']}><EmployeesList /></ProtectedRoute>} />
           <Route path="employees/new" element={<ProtectedRoute roles={['owner', 'hr']}><AddEmployee /></ProtectedRoute>} />
           <Route path="employees/:id" element={<ProtectedRoute roles={['owner', 'hr']}><EmployeeDetail /></ProtectedRoute>} />
-          <Route path="injury-reports" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><InjuryReports /></ProtectedRoute>} />
+          <Route path="injury-reports" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><InjuryAnalytics /></ProtectedRoute>} />
+          <Route path="injury-reports/list" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><InjuryReports /></ProtectedRoute>} />
           <Route path="injury-reports/new" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><InjuryReportNew /></ProtectedRoute>} />
-          <Route path="injury-reports/analytics" element={<ProtectedRoute roles={['owner', 'hr']}><InjuryAnalytics /></ProtectedRoute>} />
+          <Route path="injury-reports/analytics" element={<Navigate to="/injury-reports" replace />} />
           <Route path="injury-reports/:id" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><InjuryReportDetail /></ProtectedRoute>} />
           <Route path="injury-reports/:id/root-cause" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><RootCauseForm /></ProtectedRoute>} />
           <Route

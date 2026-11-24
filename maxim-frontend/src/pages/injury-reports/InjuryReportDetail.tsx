@@ -11,6 +11,7 @@ import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { fetchJobs } from '@/api/jobs'
+import { localDateString } from '@/utils/dates'
 import type { InjuryReport } from '@/types'
 
 export function InjuryReportDetail() {
@@ -29,6 +30,8 @@ export function InjuryReportDetail() {
 
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState<Partial<InjuryReport>>({})
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const todayStr = localDateString()
 
   useEffect(() => {
     if (report) setForm({ ...report })
@@ -69,30 +72,40 @@ export function InjuryReportDetail() {
   const r = report
   const handleSave = async () => {
     if (!id) return
-    await updateReport(id, {
-      siteName: form.siteName?.trim(),
-      reportedBy: form.reportedBy?.trim(),
-      reportedAt: form.reportedAt?.trim(),
-      status: form.status ?? r.status,
-      severity: form.severity ?? r.severity,
-      description: form.description?.trim(),
-      followUpNotes: form.followUpNotes?.trim() || undefined,
-      injuredPersonName: form.injuredPersonName?.trim() || r.injuredPersonName || undefined,
-      injuredPersonId: form.injuredPersonId || undefined,
-      injuryType: form.injuryType || undefined,
-      bodyPart: form.bodyPart || undefined,
-      mechanism: form.mechanism || undefined,
-      dateOfInjury: form.dateOfInjury || undefined,
-      lostTime: form.lostTime,
-      daysAwayFromWork: form.daysAwayFromWork,
-      restrictedDutyDays: form.restrictedDutyDays,
-      jobId: form.jobId || undefined,
-      wsibReported: form.wsibReported,
-      wsibClaimNumber: form.wsibClaimNumber?.trim() || undefined,
-      wsibReportedAt: form.wsibReportedAt || undefined,
-      subcontractorId: form.subcontractorId || undefined,
-    })
-    setIsEditing(false)
+    if (form.dateOfInjury && form.dateOfInjury > todayStr) {
+      setSaveError('Date of injury cannot be in the future. Past dates and today only.')
+      return
+    }
+    setSaveError(null)
+    try {
+      await updateReport(id, {
+        siteName: form.siteName?.trim(),
+        reportedBy: form.reportedBy?.trim(),
+        reportedAt: form.reportedAt?.trim(),
+        status: form.status ?? r.status,
+        severity: form.severity ?? r.severity,
+        description: form.description?.trim(),
+        followUpNotes: form.followUpNotes?.trim() || undefined,
+        injuredPersonName: form.injuredPersonName?.trim() || r.injuredPersonName || undefined,
+        injuredPersonId: form.injuredPersonId || undefined,
+        injuryType: form.injuryType || undefined,
+        bodyPart: form.bodyPart || undefined,
+        mechanism: form.mechanism || undefined,
+        dateOfInjury: form.dateOfInjury || undefined,
+        lostTime: form.lostTime,
+        daysAwayFromWork: form.daysAwayFromWork,
+        restrictedDutyDays: form.restrictedDutyDays,
+        jobId: form.jobId || undefined,
+        wsibReported: form.wsibReported,
+        wsibClaimNumber: form.wsibClaimNumber?.trim() || undefined,
+        wsibReportedAt: form.wsibReportedAt || undefined,
+        subcontractorId: form.subcontractorId || undefined,
+      })
+      setIsEditing(false)
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? err?.response?.data?.message ?? err?.message ?? 'Failed to save'
+      setSaveError(typeof msg === 'string' ? msg : 'Failed to save')
+    }
   }
 
   return (
@@ -111,11 +124,11 @@ export function InjuryReportDetail() {
           </div>
         </div>
         {!isEditing ? (
-          <Button onClick={() => setIsEditing(true)}>Edit</Button>
+          <Button onClick={() => { setSaveError(null); setIsEditing(true) }}>Edit</Button>
         ) : (
           <div className="flex gap-2">
             <Button onClick={handleSave}>Save</Button>
-            <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => { setSaveError(null); setIsEditing(false) }}>Cancel</Button>
           </div>
         )}
       </div>
@@ -152,6 +165,11 @@ export function InjuryReportDetail() {
           </div>
         ) : (
           <div className="mt-4 space-y-3">
+            {saveError && (
+              <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-2 text-sm text-red-800 dark:text-red-200">
+                {saveError}
+              </div>
+            )}
             <Input label="Injured person (name)" value={form.injuredPersonName ?? ''} onChange={(e) => setForm((f) => ({ ...f, injuredPersonName: e.target.value }))} placeholder="Who was injured" />
             <Input label="Site name" value={form.siteName ?? ''} onChange={(e) => setForm((f) => ({ ...f, siteName: e.target.value }))} />
             <Input label="Reported by" value={form.reportedBy ?? ''} onChange={(e) => setForm((f) => ({ ...f, reportedBy: e.target.value }))} />
@@ -221,7 +239,14 @@ export function InjuryReportDetail() {
                 <option value="other">Other</option>
               </select>
             </div>
-            <Input label="Date of injury" type="date" value={form.dateOfInjury ?? ''} onChange={(e) => setForm((f) => ({ ...f, dateOfInjury: e.target.value || undefined }))} />
+            <Input
+              label="Date of injury"
+              type="date"
+              max={todayStr}
+              value={form.dateOfInjury ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, dateOfInjury: e.target.value || undefined }))}
+              hint="Past dates and today only. Used in Injury Analytics."
+            />
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={form.lostTime ?? false} onChange={(e) => setForm((f) => ({ ...f, lostTime: e.target.checked }))} className="rounded border-slate-300" />
               <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Lost time injury</span>

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
+import { localDateString } from '@/utils/dates'
 
 export function InjuryReportNew() {
   const navigate = useNavigate()
@@ -19,6 +20,8 @@ export function InjuryReportNew() {
   const [severity, setSeverity] = useState<'minor' | 'moderate' | 'major'>('minor')
   const [reportedBy, setReportedBy] = useState(user?.name ?? '')
   const [injuredPersonName, setInjuredPersonName] = useState('')
+  const [dateOfInjury, setDateOfInjury] = useState('')
+  const todayStr = localDateString()
 
   const canCreateReport = user?.role === 'hr' || user?.role === 'owner' || user?.role === 'supervisor'
   if (!canCreateReport) {
@@ -36,6 +39,10 @@ export function InjuryReportNew() {
       setError('Site name and description are required.')
       return
     }
+    if (dateOfInjury && dateOfInjury > todayStr) {
+      setError('Date of injury cannot be in the future.')
+      return
+    }
     setError(null)
     setSubmitting(true)
     try {
@@ -45,6 +52,7 @@ export function InjuryReportNew() {
         severity,
         reportedBy: reportedBy.trim() || user?.name,
         injuredPersonName: injuredPersonName.trim() || undefined,
+        dateOfInjury: dateOfInjury || undefined,
         status: 'draft',
       })
       navigate(`/injury-reports/${report.id}`)
@@ -111,6 +119,14 @@ export function InjuryReportNew() {
             value={injuredPersonName}
             onChange={(e) => setInjuredPersonName(e.target.value)}
             placeholder="Name of injured person"
+          />
+          <Input
+            label="Date of injury"
+            type="date"
+            max={todayStr}
+            value={dateOfInjury}
+            onChange={(e) => setDateOfInjury(e.target.value)}
+            hint="Past dates and today only. Used in Injury Analytics."
           />
           <div className="flex gap-2">
             <Button type="submit" disabled={submitting}>
