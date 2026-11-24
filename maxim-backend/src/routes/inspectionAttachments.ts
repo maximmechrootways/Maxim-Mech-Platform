@@ -37,7 +37,9 @@ const upload = multer({
 router.get('/', authenticate, async (req, res, next) => {
     try {
         const scheduleId = req.query.scheduleId as string | undefined
-        const list = await inspectionAttachmentService.listAllAttachments(req.user!.role)
+        const list = scheduleId
+            ? await inspectionAttachmentService.listAttachments(req.user!.role, scheduleId)
+            : await inspectionAttachmentService.listAllAttachments(req.user!.role)
         res.status(200).json(list)
     } catch (e) {
         next(e)

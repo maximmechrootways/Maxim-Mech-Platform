@@ -164,8 +164,8 @@ export function ScheduledInspections() {
 
       {canUpload && (
         <Card padding="lg">
-          <h2 className="font-display font-semibold text-lg text-neutral-900 dark:text-white mb-3">Inspection Files</h2>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">Upload checklists, photos, or reports and add notes. Files are stored in the backend. <strong>Upcoming / due</strong> and <strong>Recent results</strong> come from the inspections API.</p>
+          <h2 className="font-display font-semibold text-lg text-neutral-900 dark:text-white mb-3">Supporting Documents</h2>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">Upload checklists, photos, or reports for an inspection (PDF or images). Optionally link a file to a schedule and add notes.</p>
           {attachError && (
             <div className="mb-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-800 dark:text-red-200">
               {attachError}

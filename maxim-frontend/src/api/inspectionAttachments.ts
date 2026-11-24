@@ -8,8 +8,10 @@ export interface InspectionAttachmentRecord {
   uploadedAt: string
 }
 
-export async function fetchInspectionAttachments(): Promise<InspectionAttachmentRecord[]> {
-  const { data } = await api.get<InspectionAttachmentRecord[]>('/inspection-attachments')
+export async function fetchInspectionAttachments(scheduleId?: string): Promise<InspectionAttachmentRecord[]> {
+  const { data } = await api.get<InspectionAttachmentRecord[]>('/inspection-attachments', {
+    params: scheduleId ? { scheduleId } : undefined,
+  })
   return Array.isArray(data) ? data : []
 }
 

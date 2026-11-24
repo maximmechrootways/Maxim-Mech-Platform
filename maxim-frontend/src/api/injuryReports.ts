@@ -70,3 +70,46 @@ export async function putRootCause(injuryId: string, payload: RootCausePayload) 
   const { data } = await api.put(`/injury-reports/${injuryId}/root-cause`, payload)
   return data
 }
+
+export interface InjuryReportAttachmentRecord {
+  id: string
+  injuryReportId: string
+  name: string
+  notes?: string
+  uploadedAt: string
+}
+
+export async function fetchInjuryReportAttachments(injuryReportId: string): Promise<InjuryReportAttachmentRecord[]> {
+  const { data } = await api.get<InjuryReportAttachmentRecord[]>(`/injury-reports/${injuryReportId}/attachments`)
+  return Array.isArray(data) ? data : []
+}
+
+export async function uploadInjuryReportAttachment(
+  injuryReportId: string,
+  file: File,
+  options?: { notes?: string }
+): Promise<InjuryReportAttachmentRecord> {
+  const form = new FormData()
+  form.append('file', file)
+  if (options?.notes !== undefined) form.append('notes', options.notes)
+  // Let the shared axios interceptor clear Content-Type so the browser sets the multipart boundary.
+  const { data } = await api.post<InjuryReportAttachmentRecord>(
+    `/injury-reports/${injuryReportId}/attachments`,
+    form
+  )
+  return data
+}
+
+export async function getInjuryReportAttachmentFileUrl(
+  injuryReportId: string,
+  attachmentId: string
+): Promise<{ url: string; expiresInMinutes: number }> {
+  const { data } = await api.get<{ url: string; expiresInMinutes: number }>(
+    `/injury-reports/${injuryReportId}/attachments/${attachmentId}/file-url`
+  )
+  return data
+}
+
+export async function deleteInjuryReportAttachment(injuryReportId: string, attachmentId: string): Promise<void> {
+  await api.delete(`/injury-reports/${injuryReportId}/attachments/${attachmentId}`)
+}

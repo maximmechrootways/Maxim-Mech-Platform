@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useUser } from '@/contexts/UserContext'
 import { useRootCause } from '@/contexts/RootCauseContext'
@@ -11,6 +11,8 @@ import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { fetchJobs } from '@/api/jobs'
+import * as injuryReportsApi from '@/api/injuryReports'
+import type { InjuryReportAttachmentRecord } from '@/api/injuryReports'
 import { localDateString } from '@/utils/dates'
 import type { InjuryReport } from '@/types'
 
@@ -32,6 +34,38 @@ export function InjuryReportDetail() {
   const [form, setForm] = useState<Partial<InjuryReport>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
   const todayStr = localDateString()
+
+  const [attachments, setAttachments] = useState<InjuryReportAttachmentRecord[]>([])
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [pendingNotes, setPendingNotes] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const canUploadDocs = user?.role === 'owner' || user?.role === 'hr' || user?.role === 'supervisor'
+
+  const clearPendingFile = () => {
+    setPendingFile(null)
+    setPendingNotes('')
+    setAttachError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const loadAttachments = useCallback(() => {
+    if (!id || !canUploadDocs) {
+      setAttachments([])
+      return
+    }
+    setAttachmentsLoading(true)
+    injuryReportsApi.fetchInjuryReportAttachments(id)
+      .then(setAttachments)
+      .catch(() => setAttachments([]))
+      .finally(() => setAttachmentsLoading(false))
+  }, [id, canUploadDocs])
+
+  useEffect(() => {
+    loadAttachments()
+  }, [loadAttachments])
 
   useEffect(() => {
     if (report) setForm({ ...report })
@@ -291,6 +325,159 @@ export function InjuryReportDetail() {
           <Textarea className="mt-4" value={form.followUpNotes ?? ''} onChange={(e) => setForm((f) => ({ ...f, followUpNotes: e.target.value }))} placeholder="Add follow-up notes..." />
         )}
       </Card>
+
+      {canUploadDocs && id && (
+        <Card padding="lg">
+          <CardHeader>Supporting Documents</CardHeader>
+          <CardDescription>Upload inspection notes, photos, or other supporting files (PDF or images) for this report.</CardDescription>
+          {attachError && (
+            <div className="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-800 dark:text-red-200">
+              {attachError}
+            </div>
+          )}
+          <div className="mt-4 space-y-3">
+            <label className="block">
+              <span className="sr-only">Choose file</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,image/png,image/jpeg,.png,.jpg,.jpeg"
+                className="block w-full text-sm text-neutral-600 dark:text-neutral-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-brand-100 file:text-brand-700 dark:file:bg-brand-900/40 dark:file:text-brand-300"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null
+                  setPendingFile(file)
+                  if (!file) setPendingNotes('')
+                  setAttachError(null)
+                }}
+              />
+            </label>
+            {pendingFile && (
+              <p className="text-sm text-neutral-700 dark:text-neutral-300">
+                Selected: <span className="font-medium">{pendingFile.name}</span>
+              </p>
+            )}
+            <div>
+              <label htmlFor="injury-supporting-doc-notes" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Notes or description (optional)</label>
+              <input
+                id="injury-supporting-doc-notes"
+                type="text"
+                placeholder="e.g. Site inspection photos, witness statement"
+                value={pendingNotes}
+                onChange={(e) => setPendingNotes(e.target.value)}
+                className="w-full min-h-[40px] px-3 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white text-sm"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={async () => {
+                  if (!pendingFile || !id) return
+                  setUploading(true)
+                  setAttachError(null)
+                  try {
+                    const added = await injuryReportsApi.uploadInjuryReportAttachment(id, pendingFile, {
+                      notes: pendingNotes.trim() || undefined,
+                    })
+                    setAttachments((prev) => [added, ...prev])
+                    clearPendingFile()
+                  } catch (err: any) {
+                    const msg =
+                      err?.response?.data?.error ??
+                      err?.response?.data?.message ??
+                      err?.message
+                    if (typeof msg === 'string' && msg.trim()) {
+                      setAttachError(msg)
+                    } else if (err?.response?.status === 404 || err?.response?.status === 500) {
+                      setAttachError('Upload failed. The supporting-documents table may be missing — run the database migration and restart the API.')
+                    } else {
+                      setAttachError('Upload failed. Only PDF and images (PNG, JPEG) are allowed.')
+                    }
+                  } finally {
+                    setUploading(false)
+                  }
+                }}
+                disabled={!pendingFile || uploading}
+              >
+                {uploading ? 'Uploading…' : 'Upload file'}
+              </Button>
+              {pendingFile && (
+                <Button variant="outline" onClick={clearPendingFile} disabled={uploading}>
+                  Cancel
+                </Button>
+              )}
+            </div>
+          </div>
+          {attachmentsLoading ? (
+            <p className="mt-6 text-sm text-neutral-500">Loading files…</p>
+          ) : attachments.length > 0 ? (
+            <ul className="mt-6 space-y-2">
+              {attachments.map((a) => (
+                <li key={a.id} className="flex flex-col gap-1 py-2 px-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 text-sm">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-neutral-900 dark:text-white truncate">{a.name}</p>
+                      <span className="text-neutral-500 dark:text-neutral-400">Uploaded {a.uploadedAt}</span>
+                      {a.notes && <p className="text-neutral-600 dark:text-neutral-400 text-xs mt-0.5">{a.notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          injuryReportsApi.getInjuryReportAttachmentFileUrl(id, a.id)
+                            .then(({ url }) => window.open(url, '_blank'))
+                            .catch(() => setAttachError('Could not open file'))
+                        }}
+                      >
+                        Preview
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const { url } = await injuryReportsApi.getInjuryReportAttachmentFileUrl(id, a.id)
+                            const res = await fetch(url, { mode: 'cors' })
+                            if (!res.ok) throw new Error('Download failed')
+                            const blob = await res.blob()
+                            const blobUrl = URL.createObjectURL(blob)
+                            const link = document.createElement('a')
+                            link.href = blobUrl
+                            link.download = a.name || 'injury-file'
+                            link.click()
+                            URL.revokeObjectURL(blobUrl)
+                          } catch {
+                            setAttachError('Could not download file')
+                          }
+                        }}
+                      >
+                        Download
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={async () => {
+                          if (!window.confirm('Remove this file?')) return
+                          try {
+                            await injuryReportsApi.deleteInjuryReportAttachment(id, a.id)
+                            setAttachments((prev) => prev.filter((x) => x.id !== a.id))
+                          } catch {
+                            setAttachError('Failed to remove file')
+                          }
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-6 text-sm text-neutral-500 dark:text-neutral-400">No supporting documents yet.</p>
+          )}
+        </Card>
+      )}
 
       <Card padding="lg">
         <CardHeader>WSIB / workers&apos; comp</CardHeader>

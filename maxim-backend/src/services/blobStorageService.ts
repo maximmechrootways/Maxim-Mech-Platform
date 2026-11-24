@@ -22,7 +22,7 @@ containerClient.createIfNotExists().catch((err: any) => {
 
 export async function uploadBlob(
     localFilePath: string,
-    folder: 'templates' | 'documents' | 'signatures' | 'employee_documents' | 'inspection_attachments' | 'equipment' | 'estimation_pricing' | 'company_wsib' = 'templates'
+    folder: 'templates' | 'documents' | 'signatures' | 'employee_documents' | 'inspection_attachments' | 'injury_report_attachments' | 'equipment' | 'estimation_pricing' | 'company_wsib' = 'templates'
 ): Promise<string> {
     const ext = path.extname(localFilePath) || '.pdf'
     const lowerExt = ext.toLowerCase()

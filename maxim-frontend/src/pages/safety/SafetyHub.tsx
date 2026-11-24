@@ -9,6 +9,8 @@ type HubAction = { to: string; label: string; description: string; icon: string;
 
 /** Shared bulletin tiles — same for labourer, supervisor, HR, and owner. */
 const ALL_ROLES: UserRole[] = ['owner', 'hr', 'supervisor', 'labourer']
+/** Matches backend permissions matrix: near_miss viewRoles */
+const NEAR_MISS_ROLES: UserRole[] = ['owner', 'hr', 'supervisor']
 
 const DOCUMENT_ACTIONS: HubAction[] = [
   { to: '/health-safety-manual', label: 'Health & Safety Manual', description: 'View uploaded health and safety manuals.', icon: '📘', roles: ALL_ROLES },
@@ -19,11 +21,24 @@ const DOCUMENT_ACTIONS: HubAction[] = [
   { to: '/safety/meeting-minutes', label: 'Meeting Minutes / Agendas', description: 'View uploaded meeting records.', icon: '🗒️', roles: ALL_ROLES },
 ]
 
+const REPORT_ACTIONS: HubAction[] = [
+  {
+    to: '/safety/near-miss',
+    label: 'Near-Miss Reports',
+    description: 'Report and track near-miss events (no injury). Submit, review, and close.',
+    icon: '📝',
+    roles: NEAR_MISS_ROLES,
+  },
+]
+
 export function SafetyHub() {
   const { user } = useUser()
   const { isPinned, togglePinned } = usePinnedSafety()
   const isHrView = user?.role === 'owner' || user?.role === 'hr'
   const visibleDocuments = DOCUMENT_ACTIONS.filter(
+    (a) => !a.roles || (user?.role && a.roles.includes(user.role)),
+  )
+  const visibleReports = REPORT_ACTIONS.filter(
     (a) => !a.roles || (user?.role && a.roles.includes(user.role)),
   )
   const canPin = user?.role === 'owner' || user?.role === 'hr'
@@ -73,6 +88,13 @@ export function SafetyHub() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-300">Health & Safety Documents</h2>
         {renderActionGrid(visibleDocuments)}
       </section>
+
+      {visibleReports.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-300">Reports</h2>
+          {renderActionGrid(visibleReports)}
+        </section>
+      ) : null}
 
       {isHrView ? (
         <section className="space-y-3">

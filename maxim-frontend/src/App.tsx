@@ -277,14 +277,14 @@ export default function App() {
           <Route path="safety/incidents/:id" element={<IncidentDetail />} />
           <Route path="safety/hazards" element={<HazardsList />} />
           <Route path="safety/hazards/:id" element={<HazardDetail />} />
-          <Route path="safety/near-miss" element={<NearMissList />} />
-          <Route path="safety/near-miss/:id" element={<NearMissDetail />} />
+          <Route path="safety/near-miss" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><NearMissList /></ProtectedRoute>} />
+          <Route path="safety/near-miss/:id" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><NearMissDetail /></ProtectedRoute>} />
           <Route path="safety/observations" element={<SafetyObservationsList />} />
           <Route path="safety/training" element={<Navigate to="/certificates" replace />} />
           <Route path="safety/corrective-actions" element={<ProtectedRoute roles={['owner', 'hr']}><CorrectiveActionsList /></ProtectedRoute>} />
           <Route path="safety/alerts" element={<SafetyAlertsList />} />
-          <Route path="safety/inspections" element={<ScheduledInspections />} />
-          <Route path="safety/inspections/result/:id" element={<InspectionResultDetail />} />
+          <Route path="safety/inspections" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><ScheduledInspections /></ProtectedRoute>} />
+          <Route path="safety/inspections/result/:id" element={<ProtectedRoute roles={['owner', 'hr', 'supervisor']}><InspectionResultDetail /></ProtectedRoute>} />
           <Route path="safety/compliance-calendar" element={<ProtectedRoute roles={['owner', 'hr']}><ComplianceCalendar /></ProtectedRoute>} />
           <Route path="safety/regulations" element={<RegulationsReference />} />
           <Route path="safety/analytics" element={<ProtectedRoute roles={['owner', 'hr']}><SafetyAnalytics /></ProtectedRoute>} />
